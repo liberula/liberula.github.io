@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.home-shape-1 {
+  height: 150px;
+  width: 150px;
+  background-color: #F6C400;
+  margin-right: 20px;
+}
+
+@layer base {
+  @font-face {
+    font-family: 'Roboto';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src:
+      local("Roboto"),
+      url(/fonts/Roboto-Black.ttf) format('tff'),
+      url(/fonts/Roboto-Bold.ttf) format('tff'),
+      url(/fonts/Roboto-Italic.ttf) format('tff'),
+      url(/fonts/Roboto-Medium.ttf) format('tff'),
+      url(/fonts/Roboto-Regular.ttf) format('tff'),
+  }
+}
+
