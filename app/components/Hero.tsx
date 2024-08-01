@@ -23,7 +23,7 @@ export default function Hero() {
           <BigButton label="Check our games" link='/' className=''/>
         </div>
         <Image
-            className='laptop:h-[500px] laptop:w-[500px] desktop:h-[1000px] desktop:w-[1000px]'
+            className='laptop:h-[500px] laptop:w-[500px] desktop:h-[900px] desktop:w-[900px] mt-16'
             src={"/images/hero-image.svg"}
             width={300}
             height={300}

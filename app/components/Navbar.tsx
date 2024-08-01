@@ -24,10 +24,10 @@ export default function Navbar() {
             <div className='mt-2 tablet:mr-4 laptop:mt-2 laptop-l:mr-4 laptop-l:mt-4 desktop:mt-7'>
                 <ul className='flex flex-row justify-end items-center'>
                     <Link href="/games" className='ml-4 laptop-l:ml-8 hidden tablet:inline'><li className='text-white tablet:text-3xl laptop-l:text-4xl desktop:text-6xl no-underline font-bold italic hover:text-liberula-yellow inline'>GAMES</li></Link>
-                    <Link href="/" className='ml-4 laptop-l:ml-8 hidden laptop-l:inline'><li className='text-white tablet:text-3xl laptop-l:text-4xl desktop:text-6xl no-underline font-bold italic hover:text-liberula-yellow inline'>NEWSLETTER</li></Link>
+                    <Link href="https://subscribepage.io/liberula" className='ml-4 laptop-l:ml-8 hidden laptop-l:inline'><li className='text-white tablet:text-3xl laptop-l:text-4xl desktop:text-6xl no-underline font-bold italic hover:text-liberula-yellow inline'>NEWSLETTER</li></Link>
                     <Link href="/about" className='ml-4 laptop-l:ml-8 hidden laptop-l:inline'><li className='text-white tablet:text-3xl laptop-l:text-4xl desktop:text-6xl no-underline font-bold italic hover:text-liberula-yellow inline'>ABOUT</li></Link>
-                    <Link href="/contact" className='ml-4 laptop-l:ml-8 hidden tablet:inline'><li className='text-white tablet:text-3xl laptop-l:text-4xl desktop:text-6xl no-underline font-bold italic hover:text-liberula-yellow inline'>CONTACT</li></Link>
-                    <Link href="/" className='ml-4 laptop-l:ml-8 inline laptop-l:hidden'>
+                    <Link href="mailto:gaba@liberula.com" className='ml-4 laptop-l:ml-8 hidden tablet:inline'><li className='text-white tablet:text-3xl laptop-l:text-4xl desktop:text-6xl no-underline font-bold italic hover:text-liberula-yellow inline'>CONTACT</li></Link>
+                    <Link href="/#footer" className='ml-4 laptop-l:ml-8 inline laptop-l:hidden'>
                         <li>
                             <VscTriangleDown color="white" size={70} className='hover:fill-liberula-yellow'/>
                         </li>
