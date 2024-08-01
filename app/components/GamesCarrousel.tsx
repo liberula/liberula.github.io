@@ -1,6 +1,6 @@
 'use client';
 import React from "react";
-import Slider from "react-slick";
+import Slider, { CustomArrowProps } from "react-slick";
 import Image from 'next/image'
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -8,7 +8,7 @@ import Link from "next/link";
 import GameCarouselItem from "./GameCarouselItem";
 
 
-function SampleNextArrow(props) {
+function SampleNextArrow(props:CustomArrowProps) {
   const { className, style, onClick } = props;
   return (
     <div
@@ -19,7 +19,7 @@ function SampleNextArrow(props) {
   );
 }
 
-function SamplePrevArrow(props) {
+function SamplePrevArrow(props:CustomArrowProps) {
   const { className, style, onClick } = props;
   return (
     <div

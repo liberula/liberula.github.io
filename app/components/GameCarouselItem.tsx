@@ -30,7 +30,7 @@ export default function GameCarouselItem({image_source,game_title, game_descript
             <div className='flex flex-row self-end gap-1 tablet:gap-6 '>
             {
               store_sources.map((store_source, i) => 
-                <Link className="self-end h-fit w-fit max-w-32 mt-6 mr-1 tablet:w-32 desktop:w-60 desktop:max-w-60 desktop:h-60" href={store_links[i]}>
+                <Link className="self-end h-fit w-fit max-w-32 mt-6 mr-1 tablet:w-32 desktop:w-60 desktop:max-w-60 desktop:h-60" key={i} href={store_links[i]}>
                   <Image
                     src={store_source}
                     width={300}
