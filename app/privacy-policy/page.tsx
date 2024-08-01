@@ -62,7 +62,7 @@ export default function PrivacyPolicy() {
         </section>
 
         <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4">8. Children's Privacy</h2>
+            <h2 className="text-2xl font-semibold mb-4">8. Children&apos;s Privacy</h2>
             <p>We do not knowingly collect personal information from children under 13. If we learn that we have collected personal information from a child under 13 without parental consent, we will delete that information as quickly as possible.</p>
         </section>
 

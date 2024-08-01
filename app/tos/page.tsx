@@ -9,7 +9,7 @@ export default function TOS() {
         
         <section className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">1. Introduction</h2>
-            <p>Welcome to Liberula Games! These Terms of Service ("Terms") govern your use of our website, games, and other services provided by Liberula Games ("we," "us," "our"). By accessing or using our services, you agree to these Terms. If you do not agree with these Terms, please do not use our services.</p>
+            <p>Welcome to Liberula Games! These Terms of Service (&quot;Terms&quot;) govern your use of our website, games, and other services provided by Liberula Games (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;). By accessing or using our services, you agree to these Terms. If you do not agree with these Terms, please do not use our services.</p>
         </section>
 
         <section className="mb-8">
@@ -60,7 +60,7 @@ export default function TOS() {
 
         <section className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">7. Disclaimer of Warranties</h2>
-            <p>Our services are provided "as is" without warranties of any kind, either express or implied. We do not guarantee that our services will be uninterrupted, error-free, or free of viruses or other harmful components.</p>
+            <p>Our services are provided &quot;as is&quot; without warranties of any kind, either express or implied. We do not guarantee that our services will be uninterrupted, error-free, or free of viruses or other harmful components.</p>
         </section>
 
         <section className="mb-8">
