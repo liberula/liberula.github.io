@@ -20,7 +20,7 @@ export default function Hero() {
           laptop-l:text-[100px] laptop-l:leading-[120px] laptop-l:mt-0
           desktop:text-[130px] desktop:leading-[180px] desktop:mx-80
           '>Here your choices matter.</h1>
-          <BigButton label="Check our games" link='/' className=''/>
+          <BigButton label="Check our games" link='/games' className=''/>
         </div>
         <Image
             className='laptop:h-[500px] laptop:w-[500px] desktop:h-[900px] desktop:w-[900px] mt-16'
