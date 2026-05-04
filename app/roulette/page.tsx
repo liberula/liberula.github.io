@@ -15,7 +15,7 @@ export default function Page() {
       }}
     >
       <a
-        href="/dragon-test/redirect"
+        href="/roulette/redirect"
         style={{
           display: "flex",
           flexDirection: "column",
@@ -26,7 +26,7 @@ export default function Page() {
         }}
       >
         <img
-          src="/dragon-test/image.png"
+          src="/roulette/image.png"
           style={{
             width: "100%",
             maxWidth: 400,
@@ -35,14 +35,8 @@ export default function Page() {
           }}
         />
 
-        <h1
-          style={{
-            color: "#fff",
-            textAlign: "center",
-            fontFamily: "Verdana, sans-serif",
-          }}
-        >
-          MORE GOLD. NOW.
+        <h1 style={{ color: "#fff", textAlign: "center" }}>
+          EVERYTHING ON THE LINE
         </h1>
 
         <div

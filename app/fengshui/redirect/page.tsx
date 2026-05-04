@@ -4,15 +4,15 @@ import Script from "next/script";
 import { useEffect } from "react";
 
 const FORM_URL =
-  "https://docs.google.com/forms/d/e/1FAIpQLSeC9F_1q9qkvU5hqKmohLFuQoBENY9paETIwMi-NhoiSy-xBg/viewform?usp=dialog";
+  "https://docs.google.com/forms/d/e/1FAIpQLSc_E6_wxQw8DNvkOMwyj4qRxGrZmQu50GalCo3DuGZO0U4E8A/viewform?usp=publish-editor";
 
 export default function Page() {
   useEffect(() => {
     const trackClick = () => {
       if (window.goatcounter?.count) {
         window.goatcounter.count({
-          path: "dragon_play_now",
-          title: "Dragon Play Now",
+          path: "fengshui_play_now",
+          title: "Feng Shui Play Now",
           event: true,
         });
       }

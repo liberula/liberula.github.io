@@ -15,7 +15,7 @@ export default function Page() {
       }}
     >
       <a
-        href="/dragon-test/redirect"
+        href="/fengshui/redirect"
         style={{
           display: "flex",
           flexDirection: "column",
@@ -26,7 +26,7 @@ export default function Page() {
         }}
       >
         <img
-          src="/dragon-test/image.png"
+          src="/fengshui/image.png"
           style={{
             width: "100%",
             maxWidth: 400,
@@ -42,7 +42,7 @@ export default function Page() {
             fontFamily: "Verdana, sans-serif",
           }}
         >
-          MORE GOLD. NOW.
+          FIX THE FENG SHUI
         </h1>
 
         <div
