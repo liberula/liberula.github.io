@@ -27,6 +27,7 @@ export default function Page() {
       >
         <img
           src="/roulette/image.png"
+          alt="A wounded hero gives a criticals strike on a monster"
           style={{
             width: "100%",
             maxWidth: 400,

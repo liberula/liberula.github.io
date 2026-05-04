@@ -3,6 +3,19 @@
 import Script from "next/script";
 import { useEffect } from "react";
 
+declare global {
+  interface Window {
+    goatcounter?: {
+      count?: (data: {
+        path: string;
+        title?: string;
+        event?: boolean;
+      }) => void;
+    };
+  }
+}
+
+
 const FORM_URL =
   "https://docs.google.com/forms/d/e/1FAIpQLSeC9F_1q9qkvU5hqKmohLFuQoBENY9paETIwMi-NhoiSy-xBg/viewform?usp=dialog";
 

@@ -27,6 +27,7 @@ export default function Page() {
       >
         <img
           src="/fengshui/image.png"
+          alt="A room with energy flowing but some breaking"
           style={{
             width: "100%",
             maxWidth: 400,

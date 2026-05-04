@@ -27,6 +27,7 @@ export default function Page() {
       >
         <img
           src="/dragon-test/image.png"
+          alt="Dragon collecting gold from goblins"
           style={{
             width: "100%",
             maxWidth: 400,
