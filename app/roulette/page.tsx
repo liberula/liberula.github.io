@@ -78,9 +78,3 @@ export default function Page() {
     </main>
   );
 }
-
-const imgStyle = {
-  width: "100%",
-  objectFit: "cover",
-  borderRadius: 8,
-};
