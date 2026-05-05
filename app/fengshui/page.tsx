@@ -6,12 +6,9 @@ export default function Page() {
         inset: 0,
         background: "#000",
         display: "flex",
-        height: "100vh",
-        flexDirection: "column",
-        alignItems: "center",
         justifyContent: "center",
-        gap: 16,
-        zIndex: 9999,
+        overflowY: "auto",
+        padding: "20px 0",
       }}
     >
       <a
@@ -20,32 +17,43 @@ export default function Page() {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 12,
+          gap: 16,
           textDecoration: "none",
           cursor: "pointer",
+          maxWidth: 420,
+          width: "100%",
+          padding: "0 16px",
         }}
       >
+        {/* Hero */}
         <img
-          src="/fengshui/image.png"
-          alt="A room with energy flowing but some breaking"
+          src="/fengshui/hero.png"
+          alt=""
           style={{
             width: "100%",
-            maxWidth: 400,
             objectFit: "cover",
             borderRadius: 8,
           }}
         />
 
+        {/* Headline */}
         <h1
           style={{
             color: "#fff",
             textAlign: "center",
             fontFamily: "Verdana, sans-serif",
+            fontSize: 26,
           }}
         >
-          FIX THE FENG SHUI
+          MORE GOLD. NOW.
         </h1>
 
+        {/* Step images */}
+        <img src="/fengshui/step1.png" alt="" style={imgStyle} />
+        <img src="/fengshui/step2.png" alt="" style={imgStyle} />
+        <img src="/fengshui/step3.png" alt="" style={imgStyle} />
+
+        {/* CTA */}
         <div
           style={{
             padding: "15px 25px",
@@ -63,3 +71,9 @@ export default function Page() {
     </main>
   );
 }
+
+const imgStyle = {
+  width: "100%",
+  objectFit: "cover",
+  borderRadius: 8,
+};

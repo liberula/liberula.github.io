@@ -1,7 +1,7 @@
 import Image from "next/image";
-import Hero from "./components/Hero";
-import LatestRelease from "./components/LatestRelease";
-import Experience from "./components/Experience";
+import Hero from "../components/Hero";
+import LatestRelease from "../components/LatestRelease";
+import Experience from "../components/Experience";
 
 export default function Home() {
   return (

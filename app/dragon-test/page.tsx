@@ -6,12 +6,9 @@ export default function Page() {
         inset: 0,
         background: "#000",
         display: "flex",
-        height: "100vh",
-        flexDirection: "column",
-        alignItems: "center",
         justifyContent: "center",
-        gap: 16,
-        zIndex: 9999,
+        overflowY: "auto",
+        padding: "20px 0",
       }}
     >
       <a
@@ -20,32 +17,44 @@ export default function Page() {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 12,
+          gap: 16,
           textDecoration: "none",
           cursor: "pointer",
+          maxWidth: 420,
+          width: "100%",
+          padding: "0 16px",
         }}
       >
+        {/* Hero */}
         <img
-          src="/dragon-test/image.png"
-          alt="Dragon collecting gold from goblins"
+          src="/dragon-test/hero.png"
+          alt=""
           style={{
             width: "100%",
-            maxWidth: 400,
             objectFit: "cover",
             borderRadius: 8,
           }}
         />
 
+
+        {/* Step images */}
+        <img src="/dragon-test/step1.png" alt="" style={imgStyle} />
+        <img src="/dragon-test/step2.png" alt="" style={imgStyle} />
+        <img src="/dragon-test/step3.png" alt="" style={imgStyle} />
+
+
+        {/* Headline */}
         <h1
           style={{
             color: "#fff",
             textAlign: "center",
             fontFamily: "Verdana, sans-serif",
+            fontSize: 26,
           }}
         >
-          MORE GOLD. NOW.
+          Manage goblins. Optimize flow. Earn more gold.
         </h1>
-
+        {/* CTA */}
         <div
           style={{
             padding: "15px 25px",
@@ -63,3 +72,9 @@ export default function Page() {
     </main>
   );
 }
+
+const imgStyle = {
+  width: "100%",
+  objectFit: "cover",
+  borderRadius: 8,
+};
