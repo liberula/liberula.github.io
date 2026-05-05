@@ -1,3 +1,10 @@
+import type { CSSProperties } from "react";
+
+const imgStyle: CSSProperties = {
+  width: "100%",
+  objectFit: "cover",
+  borderRadius: 8,
+};
 export default function Page() {
   return (
     <main
