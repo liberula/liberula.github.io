@@ -32,17 +32,11 @@ export default function Page() {
           padding: "0 16px",
         }}
       >
-        {/* Hero */}
-        <img
-          src="/roulette/hero.png"
-          alt=""
-          style={{
-            width: "100%",
-            objectFit: "cover",
-            borderRadius: 8,
-          }}
-        />
 
+        {/* Step images */}
+        <img src="/roulette/step2.png" alt="" style={imgStyle} />
+        <img src="/roulette/step1.png" alt="" style={imgStyle} />
+        <img src="/roulette/step3.png" alt="" style={imgStyle} />
         {/* Headline */}
         <h1
           style={{
@@ -52,19 +46,13 @@ export default function Page() {
             fontSize: 26,
           }}
         >
-          MORE GOLD. NOW.
+          Your wheel decides your fate.
         </h1>
-
-        {/* Step images */}
-        <img src="/roulette/step1.png" alt="" style={imgStyle} />
-        <img src="/roulette/step2.png" alt="" style={imgStyle} />
-        <img src="/roulette/step3.png" alt="" style={imgStyle} />
-
         {/* CTA */}
         <div
           style={{
-            padding: "15px 25px",
-            fontSize: 20,
+            padding: "35px 45px",
+            fontSize: 40,
             fontWeight: "bold",
             background: "#ffd700",
             color: "#000",

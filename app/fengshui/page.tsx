@@ -43,6 +43,12 @@ export default function Page() {
           }}
         />
 
+        
+
+        {/* Step images */}
+        <img src="/fengshui/step2.png" alt="" style={imgStyle} />
+        <img src="/fengshui/step3.png" alt="" style={imgStyle} />
+
         {/* Headline */}
         <h1
           style={{
@@ -52,19 +58,14 @@ export default function Page() {
             fontSize: 26,
           }}
         >
-          MORE GOLD. NOW.
+          Can you fix the room?
         </h1>
-
-        {/* Step images */}
-        <img src="/fengshui/step1.png" alt="" style={imgStyle} />
-        <img src="/fengshui/step2.png" alt="" style={imgStyle} />
-        <img src="/fengshui/step3.png" alt="" style={imgStyle} />
 
         {/* CTA */}
         <div
           style={{
-            padding: "15px 25px",
-            fontSize: 20,
+            padding: "35px 45px",
+            fontSize: 40,
             fontWeight: "bold",
             background: "#ffd700",
             color: "#000",

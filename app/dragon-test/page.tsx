@@ -19,6 +19,7 @@ export default function Page() {
         padding: "20px 0",
       }}
     >
+
       <a
         href="/dragon-test/redirect"
         style={{
@@ -33,25 +34,8 @@ export default function Page() {
           padding: "0 16px",
         }}
       >
-        {/* Hero */}
-        <img
-          src="/dragon-test/hero.png"
-          alt=""
-          style={{
-            width: "100%",
-            objectFit: "cover",
-            borderRadius: 8,
-          }}
-        />
-
-
         {/* Step images */}
         <img src="/dragon-test/step1.png" alt="" style={imgStyle} />
-        <img src="/dragon-test/step2.png" alt="" style={imgStyle} />
-        <img src="/dragon-test/step3.png" alt="" style={imgStyle} />
-
-
-        {/* Headline */}
         <h1
           style={{
             color: "#fff",
@@ -60,8 +44,13 @@ export default function Page() {
             fontSize: 26,
           }}
         >
-          Manage goblins. Optimize flow. Earn more gold.
+          Find more gold. Feed your dragon.
         </h1>
+        <img src="/dragon-test/step2.png" alt="" style={imgStyle} />
+        <img src="/dragon-test/step3.png" alt="" style={imgStyle} />
+
+
+       
         {/* CTA */}
         <div
           style={{
