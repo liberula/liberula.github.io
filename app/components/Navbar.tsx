@@ -1,42 +1,48 @@
-import React from 'react'
-import Image from 'next/image'
-import Link from 'next/link'
-import { VscTriangleDown } from "react-icons/vsc";
+import Image from "next/image";
+import Link from "next/link";
 
 export default function Navbar() {
   return (
-    <nav className='bg-black p-2 sticky top-0 z-10 max-w-full'>
-        <div className='flex flex-row justify-between'>
-            <div className='laptop:ml-8'>
-                <Link href="/" className='flex justify-start items-center '>
-                    <Image
-                        className='mt-4 laptop:mt-4 desktop:w-[180px] desktop:h-[100px]'
-                        src={"/images/logo-white.svg"}
-                        width={98}
-                        height={49}
-                        alt='Liberula'
-                        priority={true}
-                    />
-                    <p className='text-white no-underline font-bold object-scale-down mt-5 hidden tablet:inline tablet:text-3xl laptop:text-4xl laptop:mt-4 desktop:text-6xl'>LIBERULA</p>
-                </Link>
-            </div>
-            
-            <div className='mt-2 tablet:mr-4 laptop:mt-2 laptop-l:mr-4 laptop-l:mt-4 desktop:mt-7'>
-                <ul className='flex flex-row justify-end items-center'>
-                    <Link href="/games" className='ml-4 laptop-l:ml-8 hidden tablet:inline'><li className='text-white tablet:text-3xl laptop-l:text-4xl desktop:text-6xl no-underline font-bold italic hover:text-liberula-yellow inline'>GAMES</li></Link>
-                    <Link href="https://subscribepage.io/liberula" className='ml-4 laptop-l:ml-8 hidden laptop-l:inline'><li className='text-white tablet:text-3xl laptop-l:text-4xl desktop:text-6xl no-underline font-bold italic hover:text-liberula-yellow inline'>NEWSLETTER</li></Link>
-                    <Link href="/about" className='ml-4 laptop-l:ml-8 hidden laptop-l:inline'><li className='text-white tablet:text-3xl laptop-l:text-4xl desktop:text-6xl no-underline font-bold italic hover:text-liberula-yellow inline'>ABOUT</li></Link>
-                    <Link href="mailto:gaba@liberula.com" className='ml-4 laptop-l:ml-8 hidden tablet:inline'><li className='text-white tablet:text-3xl laptop-l:text-4xl desktop:text-6xl no-underline font-bold italic hover:text-liberula-yellow inline'>CONTACT</li></Link>
-                    <Link href="/#footer" className='ml-4 laptop-l:ml-8 inline laptop-l:hidden'>
-                        <li>
-                            <VscTriangleDown color="white" size={70} className='hover:fill-liberula-yellow'/>
-                        </li>
-                    </Link>
-                </ul>
-                
-            </div>
+    <nav className="sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-md">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3">
+        <Link href="/" className="flex items-center gap-3">
+          <Image
+            src="/images/logo-white.svg"
+            width={46}
+            height={46}
+            alt="Liberula"
+            priority
+          />
 
+          <span className="hidden text-xl font-black tracking-tight text-white mobile-l:inline">
+            LIBERULA
+          </span>
+        </Link>
+
+        <div className="flex items-center gap-4 text-sm font-bold text-white/70">
+          <Link href="/games" className="hidden transition hover:text-liberula-yellow tablet:inline">
+            Games
+          </Link>
+
+          <Link
+            href="https://subscribepage.io/liberula"
+            className="hidden transition hover:text-liberula-yellow laptop:inline"
+          >
+            Newsletter
+          </Link>
+
+          <Link href="/about" className="hidden transition hover:text-liberula-yellow laptop:inline">
+            About
+          </Link>
+
+          <Link
+            href="mailto:gaba@liberula.com"
+            className="rounded-full bg-liberula-yellow px-4 py-2 text-black transition hover:bg-white"
+          >
+            Contact
+          </Link>
         </div>
+      </div>
     </nav>
-  )
+  );
 }
