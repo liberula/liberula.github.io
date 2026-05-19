@@ -22,6 +22,23 @@ declare global {
   }
 }
 
+function isAnalyticsDebugEnabled() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  return params.get("debugAnalytics") === "1";
+}
+
+function analyticsDebugLog(...args: unknown[]) {
+  if (!isAnalyticsDebugEnabled()) {
+    return;
+  }
+
+  console.log("[Liberula Analytics]", ...args);
+}
+
 function detectStoreVariant(): StoreVariant {
   if (typeof window === "undefined") {
     return "android";
@@ -35,7 +52,8 @@ function detectStoreVariant(): StoreVariant {
   }
 
   const userAgent = window.navigator.userAgent.toLowerCase();
-  const isTouchMac = userAgent.includes("macintosh") && "ontouchend" in document;
+  const isTouchMac =
+    userAgent.includes("macintosh") && "ontouchend" in document;
 
   if (
     userAgent.includes("iphone") ||
@@ -51,14 +69,36 @@ function detectStoreVariant(): StoreVariant {
 
 function trackInstallClick(game: StoreGame, variant: StoreVariant) {
   const eventPath = `/mobile-store/${game.slug}/install-click/${variant}`;
+  const eventTitle = `${game.title} Install Click (${variant})`;
+
+  analyticsDebugLog("Install click detected", {
+    game: game.slug,
+    variant,
+    eventPath,
+    eventTitle,
+    hasGoatCounter:
+      typeof window !== "undefined" && Boolean(window.goatcounter),
+    hasGoatCounterCount:
+      typeof window !== "undefined" && Boolean(window.goatcounter?.count),
+  });
 
   if (typeof window !== "undefined" && window.goatcounter?.count) {
     window.goatcounter.count({
       path: eventPath,
-      title: `${game.title} Install Click (${variant})`,
+      title: eventTitle,
       event: true,
     });
+
+    analyticsDebugLog("goatcounter.count called", {
+      path: eventPath,
+      title: eventTitle,
+      event: true,
+    });
+
+    return;
   }
+
+  analyticsDebugLog("goatcounter.count NOT called");
 }
 
 function Stars({ rating }: { rating: number }) {
@@ -69,15 +109,40 @@ function Stars({ rating }: { rating: number }) {
   );
 }
 
-function ScreenshotCard({ image, priority }: { image: StoreImage; priority?: boolean }) {
+function AppIcon({ game }: { game: StoreGame }) {
   return (
-    <div className="relative h-[360px] min-w-[205px] overflow-hidden rounded-2xl bg-neutral-100 shadow-sm">
+    <Image
+      src={game.icon}
+      alt={`${game.title} icon`}
+      width={112}
+      height={112}
+      className="h-24 w-24 rounded-2xl object-cover shadow-sm ios:h-28 ios:w-28"
+      priority
+    />
+  );
+}
+
+function ScreenshotCard({
+  image,
+  priority,
+  onClick,
+}: {
+  image: StoreImage;
+  priority?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative h-[360px] min-w-[205px] overflow-hidden rounded-2xl bg-neutral-100 shadow-sm"
+    >
       <Image
         src={image.src}
         alt={image.alt}
-        fill
-        className="object-cover"
-        sizes="205px"
+        width={410}
+        height={720}
+        className="h-full w-full object-cover"
         priority={priority}
       />
 
@@ -86,11 +151,54 @@ function ScreenshotCard({ image, priority }: { image: StoreImage; priority?: boo
           {image.caption}
         </div>
       )}
+    </button>
+  );
+}
+
+function MediaModal({
+  image,
+  onClose,
+}: {
+  image?: StoreImage;
+  onClose: () => void;
+}) {
+  if (!image) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        className="absolute right-4 top-4 z-10 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black"
+        onClick={onClose}
+      >
+        Close
+      </button>
+
+      <div
+        className="max-h-[90vh] w-full max-w-[420px] overflow-hidden rounded-3xl bg-black"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <Image
+          src={image.src}
+          alt={image.alt}
+          width={840}
+          height={1470}
+          className="max-h-[90vh] w-full object-contain"
+          priority
+        />
+      </div>
     </div>
   );
 }
 
 function MediaCarousel({ game }: { game: StoreGame }) {
+  const [openImage, setOpenImage] = useState<StoreImage | undefined>();
+
   const images = [game.heroScreenshot, ...game.gameplaySteps];
 
   return (
@@ -101,9 +209,17 @@ function MediaCarousel({ game }: { game: StoreGame }) {
             key={image.src}
             image={image}
             priority={index === 0}
+            onClick={() => setOpenImage(image)}
           />
         ))}
       </div>
+
+      {openImage && (
+        <MediaModal
+          image={openImage}
+          onClose={() => setOpenImage(undefined)}
+        />
+      )}
     </section>
   );
 }
@@ -133,22 +249,15 @@ function IOSStorePage({ game }: { game: StoreGame }) {
         </div>
 
         <section className="flex gap-4 border-b border-neutral-200 pb-6">
-          <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-[24px] bg-neutral-100 shadow-sm">
-            <Image
-              src={game.icon}
-              alt={`${game.title} icon`}
-              fill
-              className="object-cover"
-              sizes="112px"
-              priority
-            />
-          </div>
+          <AppIcon game={game} />
 
           <div className="flex min-w-0 flex-1 flex-col">
             <h1 className="text-2xl font-semibold leading-tight">
               {game.title}
             </h1>
+
             <p className="mt-1 text-sm text-neutral-600">{game.subtitle}</p>
+
             <p className="mt-1 text-sm text-blue-600">{game.developer}</p>
 
             <div className="mt-auto flex items-center gap-3 pt-4">
@@ -175,18 +284,21 @@ function IOSStorePage({ game }: { game: StoreGame }) {
             </div>
             <div>{game.ratingsCount} Ratings</div>
           </div>
+
           <div>
             <div className="text-lg font-semibold text-neutral-800">
               {game.ageRating}
             </div>
             <div>Age</div>
           </div>
+
           <div>
             <div className="text-lg font-semibold text-neutral-800">
               {game.category}
             </div>
             <div>Category</div>
           </div>
+
           <div>
             <div className="text-lg font-semibold text-neutral-800">
               {game.size}
@@ -199,6 +311,7 @@ function IOSStorePage({ game }: { game: StoreGame }) {
 
         <section className="border-t border-neutral-200 py-5">
           <h2 className="text-xl font-semibold">What’s New</h2>
+
           <p className="mt-2 text-sm leading-6 text-neutral-700">
             {game.whatsNew}
           </p>
@@ -206,6 +319,7 @@ function IOSStorePage({ game }: { game: StoreGame }) {
 
         <section className="border-t border-neutral-200 py-5">
           <h2 className="text-xl font-semibold">Description</h2>
+
           <p className="mt-2 text-sm leading-6 text-neutral-700">
             {game.description}
           </p>
@@ -222,13 +336,16 @@ function IOSStorePage({ game }: { game: StoreGame }) {
               >
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">{review.title}</h3>
+
                   <span className="text-xs text-neutral-500">
                     {review.author}
                   </span>
                 </div>
+
                 <div className="mt-1 text-yellow-600">
                   <Stars rating={review.rating} />
                 </div>
+
                 <p className="mt-2 text-sm leading-6 text-neutral-700">
                   {review.body}
                 </p>
@@ -258,22 +375,24 @@ function AndroidStorePage({ game }: { game: StoreGame }) {
         </div>
 
         <section className="flex gap-4">
-          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-neutral-100 shadow-sm">
-            <Image
-              src={game.icon}
-              alt={`${game.title} icon`}
-              fill
-              className="object-cover"
-              sizes="96px"
-              priority
-            />
-          </div>
+          <Image
+            src={game.icon}
+            alt={`${game.title} icon`}
+            width={96}
+            height={96}
+            className="h-24 w-24 shrink-0 rounded-2xl object-cover shadow-sm"
+            priority
+          />
 
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-medium leading-tight">{game.title}</h1>
+            <h1 className="text-2xl font-medium leading-tight">
+              {game.title}
+            </h1>
+
             <p className="mt-1 text-sm font-medium text-green-700">
               {game.developer}
             </p>
+
             <p className="mt-1 text-sm text-neutral-600">
               Contains ads ·{" "}
               {game.hasInAppPurchases ? "In-app purchases" : game.price}
@@ -286,24 +405,31 @@ function AndroidStorePage({ game }: { game: StoreGame }) {
             <div className="text-base font-semibold text-neutral-800">
               {game.rating}★
             </div>
+
             <div>{game.ratingsCount} reviews</div>
           </div>
+
           <div>
             <div className="text-base font-semibold text-neutral-800">
               {game.installs ?? "10K+"}
             </div>
+
             <div>Downloads</div>
           </div>
+
           <div>
             <div className="text-base font-semibold text-neutral-800">
               {game.ageRating}
             </div>
+
             <div>Rated for</div>
           </div>
+
           <div>
             <div className="text-base font-semibold text-neutral-800">
               {game.category}
             </div>
+
             <div>Category</div>
           </div>
         </section>
@@ -321,6 +447,7 @@ function AndroidStorePage({ game }: { game: StoreGame }) {
 
         <section className="border-t border-neutral-200 py-5">
           <h2 className="text-xl font-medium">About this game</h2>
+
           <p className="mt-2 text-sm leading-6 text-neutral-700">
             {game.description}
           </p>
@@ -329,9 +456,11 @@ function AndroidStorePage({ game }: { game: StoreGame }) {
             <span className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-700">
               {game.category}
             </span>
+
             <span className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-700">
               Offline
             </span>
+
             <span className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-700">
               Single player
             </span>
@@ -340,6 +469,7 @@ function AndroidStorePage({ game }: { game: StoreGame }) {
 
         <section className="border-t border-neutral-200 py-5">
           <h2 className="text-xl font-medium">What’s new</h2>
+
           <p className="mt-2 text-sm leading-6 text-neutral-700">
             {game.whatsNew}
           </p>
@@ -356,13 +486,16 @@ function AndroidStorePage({ game }: { game: StoreGame }) {
               >
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">{review.title}</h3>
+
                   <span className="text-xs text-neutral-500">
                     {review.author}
                   </span>
                 </div>
+
                 <div className="mt-1 text-yellow-600">
                   <Stars rating={review.rating} />
                 </div>
+
                 <p className="mt-2 text-sm leading-6 text-neutral-700">
                   {review.body}
                 </p>
@@ -379,7 +512,9 @@ export default function MobileStorePage({ game }: MobileStorePageProps) {
   const [variant, setVariant] = useState<StoreVariant>("android");
 
   useEffect(() => {
-    setVariant(detectStoreVariant());
+    const detectedVariant = detectStoreVariant();
+    analyticsDebugLog("Detected store variant", detectedVariant);
+    setVariant(detectedVariant);
   }, []);
 
   const page = useMemo(() => {
