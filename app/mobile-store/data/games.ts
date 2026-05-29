@@ -148,30 +148,30 @@ export const mobileStoreGames: Record<string, StoreGame> = {
     ],
   },
 
-  "roulette-hero": {
-    slug: "roulette-hero",
-    title: "Roulette Hero",
+  "spinfall": {
+    slug: "spinfall",
+    title: "Spinfall",
     subtitle: "Build the wheel. Time the spin. Survive the run.",
     developer: "Liberula Games",
-    icon: "/mobile-store/roulette-hero/icon.png",
+    icon: "/mobile-store/spinfall/icon.png",
     heroScreenshot: {
-      src: "/mobile-store/roulette-hero/hero.png",
+      src: "/mobile-store/spinfall/hero.png",
       alt: "A hero almost dying while a roulette wheel spins",
       caption: "Everything on the line",
     },
     gameplaySteps: [
       {
-        src: "/mobile-store/roulette-hero/step-1.png",
+        src: "/mobile-store/spinfall/step-1.png",
         alt: "Player choosing roulette wheel segments",
         caption: "Build your wheel",
       },
       {
-        src: "/mobile-store/roulette-hero/step-2.png",
+        src: "/mobile-store/spinfall/step-2.png",
         alt: "The wheel spinning during combat",
         caption: "Time it right",
       },
       {
-        src: "/mobile-store/roulette-hero/step-3.png",
+        src: "/mobile-store/spinfall/step-3.png",
         alt: "Hero surviving with a clutch heal",
         caption: "Survive the run",
       },
@@ -191,17 +191,17 @@ export const mobileStoreGames: Record<string, StoreGame> = {
       "New wheel-building prototype with faster combat and stronger survival moments.",
     reviews: [
       {
-        author: "Leo S.",
+        author: "Ryan K.",
         rating: 5,
-        title: "Stupidly tense in a good way",
-        body: "Waiting for the heal segment while almost dead is exactly the kind of chaos I like.",
+        title: "that heal lol",
+        body: "thought i was dead"
       },
       {
-        author: "Bianca T.",
+        author: "Sarah P.",
         rating: 5,
-        title: "The wheel builds are the hook",
-        body: "I wanted to keep adding weird pieces just to see if the run would break.",
-      },
+        title: "addictive",
+        body: "the wheel is way more stressful than it looks"
+      }
     ],
   },
 };
