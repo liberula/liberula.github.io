@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { StoreGame, StoreImage } from "../data/games";
+import posthog from "posthog-js";
 
 type StoreVariant = "ios" | "android";
 
@@ -67,6 +68,7 @@ function detectStoreVariant(): StoreVariant {
   return "android";
 }
 
+
 function trackInstallClick(game: StoreGame, variant: StoreVariant) {
   const eventPath = `/mobile-store/${game.slug}/install-click/${variant}`;
   const eventTitle = `${game.title} Install Click (${variant})`;
@@ -80,6 +82,13 @@ function trackInstallClick(game: StoreGame, variant: StoreVariant) {
       typeof window !== "undefined" && Boolean(window.goatcounter),
     hasGoatCounterCount:
       typeof window !== "undefined" && Boolean(window.goatcounter?.count),
+  });
+
+  posthog.capture("install_clicked", {
+    game: game.slug,
+    title: game.title,
+    store_variant: variant,
+    path: typeof window !== "undefined" ? window.location.pathname : undefined,
   });
 
   if (typeof window !== "undefined" && window.goatcounter?.count) {
@@ -509,7 +518,8 @@ function AndroidStorePage({ game }: { game: StoreGame }) {
 }
 
 export default function MobileStorePage({ game }: MobileStorePageProps) {
-  const [variant, setVariant] = useState<StoreVariant>("android");
+  const [variant, setVariant] = useState<StoreVariant | null>(null);
+  const hasTrackedView = useRef(false);
 
   useEffect(() => {
     const detectedVariant = detectStoreVariant();
@@ -517,7 +527,37 @@ export default function MobileStorePage({ game }: MobileStorePageProps) {
     setVariant(detectedVariant);
   }, []);
 
+  useEffect(() => {
+    if (variant === null) {
+      return;
+    }
+
+    if (hasTrackedView.current) {
+      return;
+    }
+
+    hasTrackedView.current = true;
+
+    posthog.capture("landing_viewed", {
+      game: game.slug,
+      title: game.title,
+      store_variant: variant,
+      path: typeof window !== "undefined" ? window.location.pathname : undefined,
+    });
+
+    analyticsDebugLog("landing_viewed tracked", {
+      game: game.slug,
+      title: game.title,
+      store_variant: variant,
+      path: typeof window !== "undefined" ? window.location.pathname : undefined,
+    });
+  }, [game.slug, game.title, variant]);
+
   const page = useMemo(() => {
+    if (variant === null) {
+      return null;
+    }
+
     if (variant === "ios") {
       return <IOSStorePage game={game} />;
     }
