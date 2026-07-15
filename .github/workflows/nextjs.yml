@@ -78,6 +78,8 @@ jobs:
         env:
           NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
           NEXT_PUBLIC_POSTHOG_HOST: ${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
+          NEXT_PUBLIC_ECO_LEAD_ENDPOINT: ${{ secrets.NEXT_PUBLIC_ECO_LEAD_ENDPOINT }}
+          NEXT_PUBLIC_META_PIXEL_ID: ${{ secrets.NEXT_PUBLIC_META_PIXEL_ID }}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
