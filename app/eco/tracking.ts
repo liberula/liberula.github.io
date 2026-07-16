@@ -1,3 +1,6 @@
+import { safePosthogCapture } from "../analytics/posthog";
+import type { EcoAttribution } from "./lead";
+
 type MetaPixel = {
   (...args: unknown[]): void;
   callMethod?: (...args: unknown[]) => void;
@@ -17,6 +20,18 @@ declare global {
 let initialized = false;
 let pageViewTracked = false;
 let viewContentTracked = false;
+
+function getEcoPosthogProperties(attribution: EcoAttribution) {
+  return {
+    product: "eco-convocacao-74b",
+    price_reference: 79,
+    utm_source: attribution.utm_source,
+    utm_medium: attribution.utm_medium,
+    utm_campaign: attribution.utm_campaign,
+    utm_content: attribution.utm_content,
+    utm_term: attribution.utm_term,
+  };
+}
 
 function getMetaPixel(): MetaPixel | null {
   if (typeof window === "undefined") return null;
@@ -52,19 +67,19 @@ function getMetaPixel(): MetaPixel | null {
   return window.fbq ?? null;
 }
 
-export function trackEcoPageView(): void {
+export function trackEcoPageView(attribution: EcoAttribution): void {
   if (pageViewTracked) return;
+  safePosthogCapture("eco_page_view", getEcoPosthogProperties(attribution));
   const fbq = getMetaPixel();
-  if (!fbq) return;
-  fbq("track", "PageView");
+  fbq?.("track", "PageView");
   pageViewTracked = true;
 }
 
-export function trackEcoViewContent(): void {
+export function trackEcoViewContent(attribution: EcoAttribution): void {
   if (viewContentTracked) return;
+  safePosthogCapture("eco_view_content", getEcoPosthogProperties(attribution));
   const fbq = getMetaPixel();
-  if (!fbq) return;
-  fbq("track", "ViewContent", {
+  fbq?.("track", "ViewContent", {
     content_name: "Convocação 74-B",
     content_ids: ["eco-convocacao-74b"],
     content_type: "product",
@@ -74,10 +89,10 @@ export function trackEcoViewContent(): void {
   viewContentTracked = true;
 }
 
-export function trackEcoLead(): void {
+export function trackEcoLead(attribution: EcoAttribution): void {
+  safePosthogCapture("eco_lead", getEcoPosthogProperties(attribution));
   const fbq = getMetaPixel();
-  if (!fbq) return;
-  fbq("track", "Lead", {
+  fbq?.("track", "Lead", {
     content_name: "Convocação 74-B",
     content_ids: ["eco-convocacao-74b"],
     value: 79,

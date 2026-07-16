@@ -72,8 +72,8 @@ export default function EcoLanding() {
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
 
   useEffect(() => {
-    readEcoAttribution();
-    trackEcoPageView();
+    const attribution = readEcoAttribution();
+    trackEcoPageView(attribution);
 
     const hero = heroRef.current;
     if (!hero) return;
@@ -81,7 +81,7 @@ export default function EcoLanding() {
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          trackEcoViewContent();
+          trackEcoViewContent(attribution);
           observer.disconnect();
         }
       },
@@ -118,13 +118,14 @@ export default function EcoLanding() {
     setSubmitState("submitting");
 
     try {
+      const attribution = readEcoAttribution();
       await submitEcoLead({
         firstName,
         email,
-        attribution: readEcoAttribution(),
+        attribution,
         sourceUrl: window.location.href,
       });
-      trackEcoLead();
+      trackEcoLead(attribution);
       setSubmitState("success");
       form.reset();
     } catch {
@@ -135,7 +136,7 @@ export default function EcoLanding() {
   }
 
   return (
-    <main className={styles.page} lang="pt-BR">
+    <main id="eco-landing" className={styles.page} lang="pt-BR">
       <header className={styles.header}>
         <div className={styles.container}>
           <EcoBrand />

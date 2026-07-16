@@ -9,11 +9,6 @@ export const metadata: Metadata = {
     "Games where your choices matter. Liberula creates gameplay-focused experiences built around agency, discovery and consequence.",
 };
 
-console.log("POSTHOG ENV", {
-  key: process.env.NEXT_PUBLIC_POSTHOG_KEY,
-  host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
-});
-
 export default function RootLayout({
   children,
 }: Readonly<{

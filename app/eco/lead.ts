@@ -1,5 +1,11 @@
 export const ECO_PRICE = 79;
 export const ECO_PRODUCT = "eco-convocacao-74b";
+const leadEndpoint = process.env.NEXT_PUBLIC_ECO_LEAD_ENDPOINT;
+const isDevelopment = process.env.NODE_ENV !== "production";
+
+if (isDevelopment) {
+  console.info(`[ECO lead] endpoint configured: ${Boolean(leadEndpoint)}`);
+}
 
 export const attributionKeys = [
   "utm_source",
@@ -56,9 +62,9 @@ export class EcoLeadSubmissionError extends Error {
   }
 }
 
-async function readFormspreeError(response: Response): Promise<string> {
+function readFormspreeError(responseBody: string): string {
   try {
-    const result = (await response.json()) as FormspreeErrorResponse;
+    const result = JSON.parse(responseBody) as FormspreeErrorResponse;
     const messages = result.errors
       ?.map((error) => error.message)
       .filter((message): message is string => Boolean(message));
@@ -69,17 +75,19 @@ async function readFormspreeError(response: Response): Promise<string> {
   }
 }
 
-export async function submitEcoLead(data: EcoLeadInput): Promise<void> {
-  const endpoint = process.env.NEXT_PUBLIC_ECO_LEAD_ENDPOINT;
+function redactPersonalData(value: string, data: EcoLeadInput): string {
+  return value
+    .replaceAll(data.firstName, "[redacted-name]")
+    .replaceAll(data.email, "[redacted-email]");
+}
 
-  if (!endpoint) {
-    if (process.env.NODE_ENV === "development") {
-      console.error(
-        "E.C.O.: configure NEXT_PUBLIC_ECO_LEAD_ENDPOINT para receber cadastros.",
-      );
+export async function submitEcoLead(data: EcoLeadInput): Promise<void> {
+  if (!leadEndpoint) {
+    if (isDevelopment) {
+      console.error("NEXT_PUBLIC_ECO_LEAD_ENDPOINT ausente no build.");
     }
 
-    throw new EcoLeadSubmissionError("ECO_LEAD_ENDPOINT_NOT_CONFIGURED");
+    throw new EcoLeadSubmissionError("Lead endpoint not configured");
   }
 
   const payload: EcoLeadPayload = {
@@ -97,21 +105,48 @@ export async function submitEcoLead(data: EcoLeadInput): Promise<void> {
     fbclid: data.attribution.fbclid ?? "",
   };
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+  if (isDevelopment) {
+    console.info("[ECO lead] request started");
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(leadEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    if (isDevelopment) {
+      console.error("[ECO lead] request failed: network", error);
+    }
+
+    throw new EcoLeadSubmissionError("Lead submission failed");
+  }
 
   if (!response.ok) {
-    const formspreeMessage = await readFormspreeError(response);
+    const responseBody = await response.text();
+
+    if (isDevelopment) {
+      console.error(`[ECO lead] request failed: ${response.status}`, {
+        status: response.status,
+        responseBody: redactPersonalData(responseBody, data),
+      });
+    }
+
+    const formspreeMessage = readFormspreeError(responseBody);
     throw new EcoLeadSubmissionError(
-      formspreeMessage || `ECO_LEAD_REQUEST_FAILED_${response.status}`,
+      formspreeMessage || `Lead submission failed with ${response.status}`,
       response.status,
     );
+  }
+
+  if (isDevelopment) {
+    console.info("[ECO lead] request succeeded");
   }
 }
 

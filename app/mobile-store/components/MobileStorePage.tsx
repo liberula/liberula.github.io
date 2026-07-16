@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { StoreGame, StoreImage } from "../data/games";
-import posthog from "posthog-js";
+import { safePosthogCapture } from "../../analytics/posthog";
 
 type StoreVariant = "ios" | "android";
 
@@ -84,7 +84,7 @@ function trackInstallClick(game: StoreGame, variant: StoreVariant) {
       typeof window !== "undefined" && Boolean(window.goatcounter?.count),
   });
 
-  posthog.capture("install_clicked", {
+  safePosthogCapture("install_clicked", {
     game: game.slug,
     title: game.title,
     store_variant: variant,
@@ -538,7 +538,7 @@ export default function MobileStorePage({ game }: MobileStorePageProps) {
 
     hasTrackedView.current = true;
 
-    posthog.capture("landing_viewed", {
+    safePosthogCapture("landing_viewed", {
       game: game.slug,
       title: game.title,
       store_variant: variant,

@@ -55,18 +55,27 @@ A landing envia um `POST` JSON diretamente para esse endpoint, com os headers
 UTMs e `fbclid`. O evento `Lead` da Meta só é disparado depois de uma resposta
 HTTP `2xx` do Formspree.
 
-### Configurar o endpoint no GitHub Pages
+### Configurar as Repository Variables no GitHub Pages
 
 1. No repositório do GitHub, abra **Settings > Secrets and variables > Actions**.
-2. Em **Repository secrets**, crie um secret chamado
-   `NEXT_PUBLIC_ECO_LEAD_ENDPOINT`.
-3. Use como valor o endpoint completo copiado do Formspree.
-4. Execute novamente o workflow **Deploy Next.js site to Pages**, pois variáveis
-   `NEXT_PUBLIC_*` são incorporadas durante o build.
+2. Abra a aba **Variables** e crie estas Repository Variables:
 
-O workflow já expõe `NEXT_PUBLIC_ECO_LEAD_ENDPOINT` ao `next build`. Apesar de o
-GitHub armazenar o valor como secret, o endpoint será público no JavaScript do
-navegador; portanto, ele nunca deve conter credenciais ou tokens privados.
+   - `NEXT_PUBLIC_ECO_LEAD_ENDPOINT`
+   - `NEXT_PUBLIC_META_PIXEL_ID`
+   - `NEXT_PUBLIC_POSTHOG_KEY`
+   - `NEXT_PUBLIC_POSTHOG_HOST`
+
+3. Use o endpoint completo do Formspree como valor de
+   `NEXT_PUBLIC_ECO_LEAD_ENDPOINT`.
+4. No PostHog, confira **Project settings** e use o host da região real do projeto:
+   `https://us.i.posthog.com` para US ou `https://eu.i.posthog.com` para EU.
+5. Execute novamente o workflow **Deploy Next.js site to Pages**.
+
+Variáveis `NEXT_PUBLIC_*` são incorporadas ao JavaScript durante o build. Alterar
+uma variável no GitHub exige obrigatoriamente um novo build e deploy. Esses
+valores são públicos no navegador e não devem conter credenciais privadas. O
+workflow interrompe o deploy com uma mensagem clara quando o endpoint de leads
+está ausente; PostHog e Meta Pixel permanecem opcionais.
 
 ### Testar uma submissão
 
@@ -86,10 +95,27 @@ e-mail de teste e envie o formulário. Confirme os três sinais:
 Também teste com um endpoint inválido: a landing deve mostrar a mensagem de erro
 e não deve disparar o evento `Lead` da Meta.
 
+Para validar a versão publicada pelo DevTools:
+
+1. abra **Network > Fetch/XHR**;
+2. envie o formulário;
+3. confirme uma requisição para `formspree.io` com status `2xx`;
+4. confirme o cadastro na aba **Submissions** do Formspree.
+
 Para habilitar o Meta Pixel, defina `NEXT_PUBLIC_META_PIXEL_ID` com o ID real no
 ambiente do build. A página envia `PageView`, `ViewContent` e, somente depois de
 uma resposta bem-sucedida do endpoint de leads, `Lead`. Sem a variável, o pixel
 fica desativado e o build continua funcionando.
 
-O workflow do GitHub Pages já expõe tanto `NEXT_PUBLIC_ECO_LEAD_ENDPOINT` quanto
-`NEXT_PUBLIC_META_PIXEL_ID` no passo `Build with Next.js`.
+### Testar o PostHog
+
+1. Abra o projeto correto no PostHog e confirme se a região é US ou EU.
+2. Abra **Live Events**.
+3. Carregue `/eco` e confirme `eco_page_view`.
+4. Role a página e confirme `eco_view_content`.
+5. Envie um lead real e confirme `eco_lead` somente após o sucesso do Formspree.
+
+A inicialização global usa captura manual de `$pageview`, evitando duplicidade no
+App Router. Sem key ou host, o SDK não é inicializado e a página continua
+funcionando. Extensões de bloqueio podem impedir requisições do PostHog; isso não
+afeta o formulário e não é contornado por proxy neste projeto.
