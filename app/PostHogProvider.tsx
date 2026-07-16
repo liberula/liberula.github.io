@@ -1,23 +1,33 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import {
   capturePosthogPageview,
   initializePosthog,
 } from "./analytics/posthog";
 
-export function PostHogProvider() {
+type PostHogProviderProps = {
+  apiKey?: string;
+  apiHost?: string;
+  children: React.ReactNode;
+};
+
+export function PostHogProvider({
+  apiKey,
+  apiHost,
+  children,
+}: PostHogProviderProps) {
   const pathname = usePathname();
 
-  useEffect(() => {
-    initializePosthog();
-  }, []);
+  useLayoutEffect(() => {
+    initializePosthog(apiKey, apiHost);
+  }, [apiHost, apiKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     capturePosthogPageview(window.location.href);
   }, [pathname]);
 
-  return null;
+  return children;
 }

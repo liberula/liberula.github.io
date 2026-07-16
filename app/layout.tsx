@@ -17,8 +17,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <PostHogProvider />
-        {children}
+        <PostHogProvider
+          apiKey={process.env.NEXT_PUBLIC_POSTHOG_KEY}
+          apiHost={process.env.NEXT_PUBLIC_POSTHOG_HOST}
+        >
+          {children}
+        </PostHogProvider>
 
         <Script
           data-goatcounter="https://liberula.goatcounter.com/count"
