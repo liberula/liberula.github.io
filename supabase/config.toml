@@ -1,2 +1,5 @@
 [functions.eco-lead]
 verify_jwt = false
+
+[functions.lead-submit]
+verify_jwt = false
