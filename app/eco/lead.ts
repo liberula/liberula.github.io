@@ -22,6 +22,7 @@ export type EcoLeadInput = {
   website: string;
   attribution: EcoAttribution;
   sourceUrl: string;
+  referrer: string;
   userAgent: string;
 };
 
@@ -38,8 +39,11 @@ export type EcoLeadPayload = {
   utm_term: string;
   fbclid: string;
   source_url: string;
-  submitted_at: string;
-  user_agent: string;
+  referrer: string;
+  metadata: {
+    submitted_at: string;
+    user_agent: string;
+  };
   website: string;
 };
 
@@ -59,12 +63,7 @@ export class EcoLeadSubmissionError extends Error {
 
 type ServiceResponse = {
   success?: boolean;
-  ok?: boolean;
-  code?: string;
-  error?: string;
-  message?: string;
   duplicate?: boolean;
-  errors?: Array<{ code?: string; message?: string }>;
 };
 
 async function readResponse(response: Response): Promise<ServiceResponse> {
@@ -73,17 +72,6 @@ async function readResponse(response: Response): Promise<ServiceResponse> {
   } catch {
     return {};
   }
-}
-
-function responseText(body: ServiceResponse): string {
-  return [body.code, body.error, body.message, ...(body.errors ?? []).flatMap((item) => [item.code, item.message])]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-}
-
-function isDuplicate(body: ServiceResponse): boolean {
-  return body.duplicate === true || /duplicate|duplicado|already.+(registered|subscribed|exists)|já.+registrad|já.+existe/.test(responseText(body));
 }
 
 export async function submitEcoLead(data: EcoLeadInput): Promise<EcoLeadResult> {
@@ -105,8 +93,11 @@ export async function submitEcoLead(data: EcoLeadInput): Promise<EcoLeadResult> 
     utm_term: data.attribution.utm_term ?? "",
     fbclid: data.attribution.fbclid ?? "",
     source_url: data.sourceUrl,
-    submitted_at: new Date().toISOString(),
-    user_agent: data.userAgent,
+    referrer: data.referrer,
+    metadata: {
+      submitted_at: new Date().toISOString(),
+      user_agent: data.userAgent,
+    },
     website: data.website,
   };
 
@@ -125,13 +116,7 @@ export async function submitEcoLead(data: EcoLeadInput): Promise<EcoLeadResult> 
   if (!response.ok) {
     throw new EcoLeadSubmissionError("Lead submission failed", "submission", response.status);
   }
-  if (body.success === true) return { duplicate: isDuplicate(body) };
-
-  // Keep rollback-by-URL compatible with Formspree while it remains the old endpoint.
-  const isLegacyFormspree = (() => {
-    try { return new URL(leadEndpoint).hostname === "formspree.io"; } catch { return false; }
-  })();
-  if (isLegacyFormspree && body.ok === true) return { duplicate: isDuplicate(body) };
+  if (body.success === true) return { duplicate: body.duplicate === true };
   throw new EcoLeadSubmissionError("Lead submission was not confirmed", "submission", response.status);
 }
 

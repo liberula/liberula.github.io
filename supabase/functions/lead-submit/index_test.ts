@@ -58,11 +58,44 @@ Deno.test("duplicate is an idempotent success", async () => {
   assert(body.success === true && body.duplicate === true, "expected duplicate success");
 });
 
+Deno.test("E.C.O. landing contract is accepted with attribution and metadata", async () => {
+  let inserted: Record<string, unknown> | undefined;
+  const handler = createLeadSubmitHandler({
+    insertLead: async (lead) => {
+      inserted = lead;
+      return "created";
+    },
+  });
+  const response = await handler(request("POST", {
+    project: "eco",
+    funnel: "free_recruitment",
+    name: "Lead E.C.O.",
+    email: "eco@example.com",
+    consent: true,
+    utm_source: "meta",
+    utm_medium: "paid",
+    utm_campaign: "recruitment",
+    utm_content: "dossier",
+    utm_term: "misterio",
+    fbclid: "eco-click-id",
+    source_url: "https://liberula.com/eco?utm_source=meta",
+    referrer: "https://www.google.com/",
+    metadata: { submitted_at: "2026-07-17T12:00:00.000Z", user_agent: "test" },
+    website: "",
+  }, "https://liberula.com"));
+
+  assert(response.status === 200, "E.C.O. contract should be accepted");
+  assert(inserted?.project === "eco" && inserted?.funnel === "free_recruitment", "wrong form persisted");
+  assert(inserted?.referrer === "https://www.google.com/", "referrer was not persisted");
+  assert((inserted?.metadata as Record<string, unknown>)?.user_agent === "test", "metadata was not persisted");
+});
+
 Deno.test("all configured project and funnel pairs are accepted", async () => {
   const handler = createLeadSubmitHandler({ insertLead: async () => "created" });
   for (const [project, funnels] of Object.entries({
     memora: ["interest", "father_day_card"],
     aferia: ["contact", "guide_interest"],
+    eco: ["free_recruitment"],
   })) {
     for (const funnel of funnels) {
       assert(
@@ -107,6 +140,8 @@ Deno.test("CORS accepts production and localhost origins", async () => {
     "https://www.quaero.com.br",
     "https://aferia.com.br",
     "https://www.aferia.com.br",
+    "https://liberula.com",
+    "https://www.liberula.com",
     "http://localhost:3000",
   ]) {
     const response = await handler(request("OPTIONS", validPayload, allowedOrigin));

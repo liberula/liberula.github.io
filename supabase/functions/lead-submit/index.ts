@@ -4,11 +4,14 @@ const PRODUCTION_ORIGINS = new Set([
   "https://www.quaero.com.br",
   "https://aferia.com.br",
   "https://www.aferia.com.br",
+  "https://liberula.com",
+  "https://www.liberula.com",
 ]);
 
 export const ALLOWED_FORMS = {
   memora: ["interest", "father_day_card"],
   aferia: ["contact", "guide_interest"],
+  eco: ["free_recruitment"],
 } as const;
 
 const CONSENT_REQUIRED_FORMS = new Set([
@@ -16,6 +19,7 @@ const CONSENT_REQUIRED_FORMS = new Set([
   "memora/father_day_card",
   "aferia/contact",
   "aferia/guide_interest",
+  "eco/free_recruitment",
 ]);
 
 type Project = keyof typeof ALLOWED_FORMS;

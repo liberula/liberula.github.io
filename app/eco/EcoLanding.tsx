@@ -124,6 +124,7 @@ export default function EcoLanding() {
         website,
         attribution,
         sourceUrl: window.location.href,
+        referrer: document.referrer,
         userAgent: navigator.userAgent,
       });
       if (!result.duplicate && !leadTrackedRef.current) {

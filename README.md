@@ -39,14 +39,14 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/deploym
 
 A rota `/eco` é uma landing gratuita de recrutamento e permanece compatível com o
 export estático do GitHub Pages. O formulário envia JSON à Edge Function pública
-`eco-lead`, que valida e grava o lead no Supabase sem expor credenciais no navegador.
+`lead-submit`, que valida e grava o lead no Supabase sem expor credenciais no navegador.
 O payload inclui projeto, funil, nome, e-mail, consentimento, UTMs, `fbclid`, URL,
-data e hora, user agent e um honeypot de proteção mínima contra spam.
+referrer, metadata e um honeypot de proteção mínima contra spam.
 
 ### Variáveis de ambiente
 
 ```env
-NEXT_PUBLIC_ECO_FORM_ENDPOINT=https://PROJECT_REF.supabase.co/functions/v1/eco-lead
+NEXT_PUBLIC_ECO_FORM_ENDPOINT=https://PROJECT_REF.supabase.co/functions/v1/lead-submit
 NEXT_PUBLIC_ECO_RECRUITMENT_END_AT=2026-07-24T23:59:59-03:00
 NEXT_PUBLIC_META_PIXEL_ID=
 NEXT_PUBLIC_POSTHOG_KEY=
@@ -57,11 +57,10 @@ Cadastre as mesmas chaves em **Settings > Secrets and variables > Actions >
 Variables**. Todas são públicas e incorporadas no build; não use tokens ou
 credenciais nelas. `NEXT_PUBLIC_ECO_FORM_ENDPOINT` é obrigatória no workflow.
 
-Mantenha a URL atual do Formspree nessa variável até a migration e a função terem
-sido publicadas e validadas. Não há fallback automático entre receptores, evitando
-cadastros duplicados. Para rollback, restaure somente a antiga URL do Formspree e
-faça um novo deploy da landing. A compatibilidade temporária reconhece a confirmação
-JSON `ok: true` do Formspree; o receptor Supabase exige `success: true`.
+Não há fallback automático entre receptores, evitando cadastros duplicados. Para
+rollback, restaure somente a URL da Edge Function `eco-lead` nessa variável e faça
+um novo deploy da landing. Tanto o receptor genérico quanto o legado confirmam o
+cadastro com JSON `success: true`.
 
 ### Supabase: migration e Edge Function
 
@@ -70,6 +69,10 @@ Os arquivos estão em:
 - `supabase/migrations/20260717000000_create_eco_leads.sql`
 - `supabase/functions/eco-lead/index.ts`
 - `supabase/functions/eco-lead/index_test.ts`
+- `supabase/migrations/20260717010000_create_leads.sql`
+- `supabase/migrations/20260717020000_allow_eco_leads.sql`
+- `supabase/functions/lead-submit/index.ts`
+- `supabase/functions/lead-submit/index_test.ts`
 
 A migration cria `public.eco_leads`, o índice único case-insensitive de e-mail,
 habilita RLS, revoga acesso de `anon` e `authenticated` e não cria policy pública.
@@ -77,18 +80,13 @@ A função usa apenas `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`, variáveis f
 automaticamente pelo Supabase no runtime. A service role nunca deve ser configurada
 como variável `NEXT_PUBLIC_*` nem commitada no repositório.
 
-Opcionalmente, configure `ECO_RECRUITMENT_END_AT` como secret da função com a mesma
-data ISO de `NEXT_PUBLIC_ECO_RECRUITMENT_END_AT`; assim o prazo também é imposto no
-servidor. Sem esse secret, o bloqueio de encerramento continua sendo feito pela landing.
-
 Com o Supabase CLI autenticado e o projeto vinculado:
 
 ```bash
 supabase link --project-ref PROJECT_REF
 supabase db push
-supabase functions deploy eco-lead --no-verify-jwt
-supabase secrets set ECO_RECRUITMENT_END_AT=2026-07-24T23:59:59-03:00
-deno test supabase/functions/eco-lead/index_test.ts
+supabase functions deploy lead-submit --no-verify-jwt
+deno test supabase/functions/lead-submit/index_test.ts
 ```
 
 O `supabase/config.toml` também registra `verify_jwt = false`, pois a função é pública.
@@ -99,17 +97,17 @@ qualquer porta. Alterações de domínio exigem atualizar a allowlist da funçã
 Após o deploy, a URL final é:
 
 ```text
-https://PROJECT_REF.supabase.co/functions/v1/eco-lead
+https://PROJECT_REF.supabase.co/functions/v1/lead-submit
 ```
 
 Teste a produção (use um e-mail descartável de QA e repita para validar deduplicação):
 
 ```bash
-curl -i 'https://PROJECT_REF.supabase.co/functions/v1/eco-lead' \
+curl -i 'https://PROJECT_REF.supabase.co/functions/v1/lead-submit' \
   -X POST \
   -H 'Origin: https://liberula.com' \
   -H 'Content-Type: application/json' \
-  --data '{"project":"eco","funnel":"free_recruitment","name":"Lead QA","email":"qa+eco@example.com","consent":true,"utm_source":"qa","utm_medium":"curl","utm_campaign":"eco-migration","utm_content":"","utm_term":"","fbclid":"qa-click-id","source_url":"https://liberula.com/eco","submitted_at":"2026-07-17T12:00:00.000Z","website":""}'
+  --data '{"project":"eco","funnel":"free_recruitment","name":"Lead QA","email":"qa+eco@example.com","consent":true,"utm_source":"qa","utm_medium":"curl","utm_campaign":"eco-migration","utm_content":"","utm_term":"","fbclid":"qa-click-id","source_url":"https://liberula.com/eco","referrer":"","metadata":{"submitted_at":"2026-07-17T12:00:00.000Z","user_agent":"curl"},"website":""}'
 ```
 
 Uma criação retorna `{"success":true,"duplicate":false}`; a repetição retorna
