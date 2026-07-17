@@ -1,11 +1,8 @@
-export const ECO_PRICE = 79;
-export const ECO_PRODUCT = "eco-convocacao-74b";
-const leadEndpoint = process.env.NEXT_PUBLIC_ECO_LEAD_ENDPOINT;
-const isDevelopment = process.env.NODE_ENV !== "production";
+export const ECO_FUNNEL = "free_recruitment";
+export const ECO_PROJECT = "eco";
 
-if (isDevelopment) {
-  console.info(`[ECO lead] endpoint configured: ${Boolean(leadEndpoint)}`);
-}
+const leadEndpoint = process.env.NEXT_PUBLIC_ECO_FORM_ENDPOINT?.trim();
+const isDevelopment = process.env.NODE_ENV !== "production";
 
 export const attributionKeys = [
   "utm_source",
@@ -16,45 +13,41 @@ export const attributionKeys = [
   "fbclid",
 ] as const;
 
-export type EcoAttribution = Partial<
-  Record<(typeof attributionKeys)[number], string>
->;
+export type EcoAttribution = Partial<Record<(typeof attributionKeys)[number], string>>;
 
 export type EcoLeadInput = {
-  firstName: string;
+  name: string;
   email: string;
+  consent: true;
   attribution: EcoAttribution;
   sourceUrl: string;
+  userAgent: string;
 };
 
 export type EcoLeadPayload = {
+  project: typeof ECO_PROJECT;
+  funnel: typeof ECO_FUNNEL;
   name: string;
   email: string;
-  priceReference: number;
-  product: typeof ECO_PRODUCT;
-  submittedAt: string;
-  sourceUrl: string;
+  consent: true;
   utm_source: string;
   utm_medium: string;
   utm_campaign: string;
   utm_content: string;
   utm_term: string;
   fbclid: string;
+  source_url: string;
+  submitted_at: string;
+  user_agent: string;
 };
 
-type FormspreeErrorResponse = {
-  error?: string;
-  errors?: Array<{
-    code?: string;
-    field?: string;
-    message?: string;
-  }>;
-  message?: string;
-};
+export type EcoLeadResult = { duplicate: boolean };
+export type EcoLeadErrorKind = "submission" | "configuration";
 
 export class EcoLeadSubmissionError extends Error {
   constructor(
     message: string,
+    public readonly kind: EcoLeadErrorKind,
     public readonly status?: number,
   ) {
     super(message);
@@ -62,100 +55,79 @@ export class EcoLeadSubmissionError extends Error {
   }
 }
 
-function readFormspreeError(responseBody: string): string {
-  try {
-    const result = JSON.parse(responseBody) as FormspreeErrorResponse;
-    const messages = result.errors
-      ?.map((error) => error.message)
-      .filter((message): message is string => Boolean(message));
+type ServiceResponse = {
+  code?: string;
+  error?: string;
+  message?: string;
+  duplicate?: boolean;
+  errors?: Array<{ code?: string; message?: string }>;
+};
 
-    return messages?.join(" ") || result.error || result.message || "";
+async function readResponse(response: Response): Promise<ServiceResponse> {
+  try {
+    return (await response.json()) as ServiceResponse;
   } catch {
-    return "";
+    return {};
   }
 }
 
-function redactPersonalData(value: string, data: EcoLeadInput): string {
-  return value
-    .replaceAll(data.firstName, "[redacted-name]")
-    .replaceAll(data.email, "[redacted-email]");
+function responseText(body: ServiceResponse): string {
+  return [body.code, body.error, body.message, ...(body.errors ?? []).flatMap((item) => [item.code, item.message])]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
-export async function submitEcoLead(data: EcoLeadInput): Promise<void> {
-  if (!leadEndpoint) {
-    if (isDevelopment) {
-      console.error("NEXT_PUBLIC_ECO_LEAD_ENDPOINT ausente no build.");
-    }
+function isDuplicate(body: ServiceResponse): boolean {
+  return body.duplicate === true || /duplicate|duplicado|already.+(registered|subscribed|exists)|já.+registrad|já.+existe/.test(responseText(body));
+}
 
-    throw new EcoLeadSubmissionError("Lead endpoint not configured");
+export async function submitEcoLead(data: EcoLeadInput): Promise<EcoLeadResult> {
+  if (!leadEndpoint) {
+    if (isDevelopment) console.warn("[E.C.O.] Endpoint de formulário não configurado.");
+    throw new EcoLeadSubmissionError("Form endpoint not configured", "configuration");
   }
 
   const payload: EcoLeadPayload = {
-    name: data.firstName,
+    project: ECO_PROJECT,
+    funnel: ECO_FUNNEL,
+    name: data.name,
     email: data.email,
-    priceReference: ECO_PRICE,
-    product: ECO_PRODUCT,
-    submittedAt: new Date().toISOString(),
-    sourceUrl: data.sourceUrl,
+    consent: data.consent,
     utm_source: data.attribution.utm_source ?? "",
     utm_medium: data.attribution.utm_medium ?? "",
     utm_campaign: data.attribution.utm_campaign ?? "",
     utm_content: data.attribution.utm_content ?? "",
     utm_term: data.attribution.utm_term ?? "",
     fbclid: data.attribution.fbclid ?? "",
+    source_url: data.sourceUrl,
+    submitted_at: new Date().toISOString(),
+    user_agent: data.userAgent,
   };
 
-  if (isDevelopment) {
-    console.info("[ECO lead] request started");
-  }
-
   let response: Response;
-
   try {
     response = await fetch(leadEndpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(payload),
     });
-  } catch (error) {
-    if (isDevelopment) {
-      console.error("[ECO lead] request failed: network", error);
-    }
-
-    throw new EcoLeadSubmissionError("Lead submission failed");
+  } catch {
+    throw new EcoLeadSubmissionError("Lead submission failed", "submission");
   }
 
+  const body = await readResponse(response);
+  if (isDuplicate(body)) return { duplicate: true };
   if (!response.ok) {
-    const responseBody = await response.text();
-
-    if (isDevelopment) {
-      console.error(`[ECO lead] request failed: ${response.status}`, {
-        status: response.status,
-        responseBody: redactPersonalData(responseBody, data),
-      });
-    }
-
-    const formspreeMessage = readFormspreeError(responseBody);
-    throw new EcoLeadSubmissionError(
-      formspreeMessage || `Lead submission failed with ${response.status}`,
-      response.status,
-    );
+    throw new EcoLeadSubmissionError("Lead submission failed", "submission", response.status);
   }
-
-  if (isDevelopment) {
-    console.info("[ECO lead] request succeeded");
-  }
+  return { duplicate: false };
 }
 
 export function readEcoAttribution(): EcoAttribution {
   if (typeof window === "undefined") return {};
-
-  const storageKey = "eco-attribution";
+  const storageKey = "eco-recruitment-attribution";
   let stored: EcoAttribution = {};
-
   try {
     stored = JSON.parse(sessionStorage.getItem(storageKey) ?? "{}") as EcoAttribution;
   } catch {
@@ -169,12 +141,10 @@ export function readEcoAttribution(): EcoAttribution {
     return result;
   }, {});
   const attribution = { ...stored, ...current };
-
   try {
     sessionStorage.setItem(storageKey, JSON.stringify(attribution));
   } catch {
-    // The form remains usable when storage is unavailable.
+    // Attribution in the current URL is still submitted when storage is unavailable.
   }
-
   return attribution;
 }

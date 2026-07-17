@@ -1,5 +1,5 @@
 import { safePosthogCapture } from "../analytics/posthog";
-import type { EcoAttribution } from "./lead";
+import { ECO_FUNNEL, type EcoAttribution } from "./lead";
 
 type MetaPixel = {
   (...args: unknown[]): void;
@@ -11,38 +11,16 @@ type MetaPixel = {
 };
 
 declare global {
-  interface Window {
-    fbq?: MetaPixel;
-    _fbq?: MetaPixel;
-  }
+  interface Window { fbq?: MetaPixel; _fbq?: MetaPixel; }
 }
 
-let initialized = false;
-let pageViewTracked = false;
-let viewContentTracked = false;
-
-function getEcoPosthogProperties(attribution: EcoAttribution) {
-  return {
-    product: "eco-convocacao-74b",
-    price_reference: 79,
-    utm_source: attribution.utm_source,
-    utm_medium: attribution.utm_medium,
-    utm_campaign: attribution.utm_campaign,
-    utm_content: attribution.utm_content,
-    utm_term: attribution.utm_term,
-  };
-}
+let pixelInitialized = false;
+const trackedOnce = new Set<string>();
 
 function getMetaPixel(): MetaPixel | null {
-  if (typeof window === "undefined") return null;
-
-  const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
-  if (!pixelId) return null;
-
-  if (!initialized) {
-    const existing = window.fbq;
-
-    if (!existing) {
+  if (typeof window === "undefined" || !process.env.NEXT_PUBLIC_META_PIXEL_ID) return null;
+  if (!pixelInitialized) {
+    if (!window.fbq) {
       const fbq: MetaPixel = (...args: unknown[]) => {
         if (fbq.callMethod) fbq.callMethod(...args);
         else fbq.queue?.push(args);
@@ -53,49 +31,50 @@ function getMetaPixel(): MetaPixel | null {
       fbq.queue = [];
       window.fbq = fbq;
       window._fbq = fbq;
-
       const script = document.createElement("script");
       script.async = true;
       script.src = "https://connect.facebook.net/en_US/fbevents.js";
       document.head.appendChild(script);
     }
-
-    window.fbq?.("init", pixelId);
-    initialized = true;
+    window.fbq?.("init", process.env.NEXT_PUBLIC_META_PIXEL_ID);
+    pixelInitialized = true;
   }
-
   return window.fbq ?? null;
 }
 
-export function trackEcoPageView(attribution: EcoAttribution): void {
-  if (pageViewTracked) return;
-  safePosthogCapture("eco_page_view", getEcoPosthogProperties(attribution));
-  const fbq = getMetaPixel();
-  fbq?.("track", "PageView");
-  pageViewTracked = true;
+function captureOnce(event: string, properties?: Record<string, unknown>): boolean {
+  if (trackedOnce.has(event)) return false;
+  trackedOnce.add(event);
+  safePosthogCapture(event, properties);
+  return true;
 }
 
-export function trackEcoViewContent(attribution: EcoAttribution): void {
-  if (viewContentTracked) return;
-  safePosthogCapture("eco_view_content", getEcoPosthogProperties(attribution));
-  const fbq = getMetaPixel();
-  fbq?.("track", "ViewContent", {
-    content_name: "Convocação 74-B",
-    content_ids: ["eco-convocacao-74b"],
-    content_type: "product",
-    value: 79,
-    currency: "BRL",
-  });
-  viewContentTracked = true;
+export function trackEcoLandingView(attribution: EcoAttribution): void {
+  if (!captureOnce("eco_recruitment_landing_view", { funnel: ECO_FUNNEL, ...attribution })) return;
+  getMetaPixel()?.("track", "PageView");
 }
 
-export function trackEcoLead(attribution: EcoAttribution): void {
-  safePosthogCapture("eco_lead", getEcoPosthogProperties(attribution));
-  const fbq = getMetaPixel();
-  fbq?.("track", "Lead", {
-    content_name: "Convocação 74-B",
-    content_ids: ["eco-convocacao-74b"],
-    value: 79,
-    currency: "BRL",
-  });
+export function trackEcoCtaClick(location: string): void {
+  safePosthogCapture("eco_recruitment_cta_click", { cta: "start_recruitment", location });
+}
+
+export function trackEcoFormStarted(): void {
+  captureOnce("eco_recruitment_form_started", { funnel: ECO_FUNNEL });
+}
+
+export function trackEcoFormError(field: string, errorType: string): void {
+  safePosthogCapture("eco_recruitment_form_error", { field, error_type: errorType });
+}
+
+export function trackEcoEmailSubmitted(attribution: EcoAttribution): void {
+  if (!captureOnce("eco_recruitment_email_submitted", {
+    utm_source: attribution.utm_source ?? "",
+    utm_campaign: attribution.utm_campaign ?? "",
+    funnel: ECO_FUNNEL,
+  })) return;
+  getMetaPixel()?.("track", "Lead");
+}
+
+export function trackEcoClosedView(): void {
+  captureOnce("eco_recruitment_closed_view", { funnel: ECO_FUNNEL });
 }

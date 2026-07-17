@@ -1,62 +1,45 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { FiArrowRight, FiCheck, FiFileText, FiMail, FiShield, FiUser } from "react-icons/fi";
 import {
-  FiArrowRight,
-  FiEye,
-  FiLock,
-  FiMail,
-  FiShield,
-  FiUser,
-} from "react-icons/fi";
-import { readEcoAttribution, submitEcoLead } from "./lead";
+  EcoLeadSubmissionError,
+  readEcoAttribution,
+  submitEcoLead,
+} from "./lead";
 import {
-  trackEcoLead,
-  trackEcoPageView,
-  trackEcoViewContent,
+  ECO_RECRUITMENT_END_LABEL,
+  getEcoCountdown,
+  isEcoRecruitmentClosed,
+  type EcoCountdown,
+} from "./deadline";
+import {
+  trackEcoClosedView,
+  trackEcoCtaClick,
+  trackEcoEmailSubmitted,
+  trackEcoFormError,
+  trackEcoFormStarted,
+  trackEcoLandingView,
 } from "./tracking";
 import styles from "./EcoLanding.module.css";
 
-type FormErrors = Partial<Record<"firstName" | "email", string>>;
-type SubmitState = "idle" | "submitting" | "success" | "error";
+type FormField = "name" | "email" | "consent";
+type FormErrors = Partial<Record<FormField, string>>;
+type SubmitState = "idle" | "submitting" | "success" | "duplicate" | "error";
 
-const features = [
-  {
-    icon: FiMail,
-    title: "Uma correspondência física",
-    description:
-      "Um envelope com documentos, registros e evidências que precisam ser examinados.",
-  },
-  {
-    icon: FiEye,
-    title: "Um caso inexplicável",
-    description:
-      "Uma investigação na fronteira entre o real, o sobrenatural e aquilo que foi oficialmente ocultado.",
-  },
-  {
-    icon: FiLock,
-    title: "Um acesso secreto",
-    description:
-      "As pistas físicas revelam as credenciais necessárias para continuar a investigação online.",
-  },
+const processSteps = [
+  { number: "01", title: "Candidatura", text: "Registre seus dados para receber as instruções iniciais." },
+  { number: "02", title: "Avaliação", text: "Analise uma ocorrência digital e apresente sua conclusão." },
+  { number: "03", title: "Admissão", text: "Candidatos aprovados poderão receber acesso às próximas etapas." },
 ];
 
 function EcoBrand({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`${styles.brand} ${compact ? styles.brandCompact : ""}`}>
-      <Image
-        className={styles.brandEmblem}
-        src="/eco/eco-emblem.webp"
-        width={compact ? 52 : 66}
-        height={compact ? 52 : 66}
-        alt=""
-        aria-hidden="true"
-      />
-      <div>
-        <p className={styles.brandName}>E.C.O.</p>
-        <p className={styles.brandMotto}>Encontrar. Conter. Ocultar.</p>
-      </div>
+      <Image className={styles.brandEmblem} src="/eco/eco-emblem.webp" width={compact ? 52 : 66} height={compact ? 52 : 66} alt="" aria-hidden="true" />
+      <div><p className={styles.brandName}>E.C.O.</p><p className={styles.brandMotto}>Encontrar. Conter. Ocultar.</p></div>
     </div>
   );
 }
@@ -66,284 +49,215 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 
 export default function EcoLanding() {
-  const heroRef = useRef<HTMLElement>(null);
   const submittingRef = useRef(false);
+  const leadTrackedRef = useRef(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
+  const [submitError, setSubmitError] = useState("");
+  const [isClosed, setIsClosed] = useState(false);
+  const [countdown, setCountdown] = useState<EcoCountdown | null>(null);
 
   useEffect(() => {
     const attribution = readEcoAttribution();
-    trackEcoPageView(attribution);
+    trackEcoLandingView(attribution);
 
-    const hero = heroRef.current;
-    if (!hero) return;
+    function refreshDeadline() {
+      const closed = isEcoRecruitmentClosed();
+      setIsClosed(closed);
+      setCountdown(closed ? { days: 0, hours: 0, minutes: 0 } : getEcoCountdown());
+      if (closed) trackEcoClosedView();
+    }
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          trackEcoViewContent(attribution);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.45 },
-    );
-    observer.observe(hero);
-    return () => observer.disconnect();
+    refreshDeadline();
+    const interval = window.setInterval(refreshDeadline, 1_000);
+    return () => window.clearInterval(interval);
   }, []);
 
   function scrollToForm() {
-    document.getElementById("cadastro-eco")?.scrollIntoView({ behavior: "smooth" });
+    trackEcoCtaClick("hero");
+    document.getElementById("candidatura-eco")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function reportValidationErrors(nextErrors: FormErrors) {
+    (Object.entries(nextErrors) as Array<[FormField, string]>).forEach(([field, message]) => {
+      trackEcoFormError(field, message.includes("obrigatório") ? "required" : "invalid");
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submittingRef.current || submitState === "success") return;
+    if (submittingRef.current || submitState === "success" || submitState === "duplicate") return;
+    if (isEcoRecruitmentClosed()) {
+      setIsClosed(true);
+      trackEcoClosedView();
+      return;
+    }
 
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const firstName = String(formData.get("firstName") ?? "").trim();
+    const name = String(formData.get("name") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const consent = formData.get("consent") === "on";
     const nextErrors: FormErrors = {};
 
-    if (!firstName) nextErrors.firstName = "Informe seu primeiro nome.";
-    if (!email) nextErrors.email = "Informe seu e-mail.";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      nextErrors.email = "Informe um e-mail válido.";
-    }
+    if (name.length < 2) nextErrors.name = "Informe um nome com pelo menos 2 caracteres.";
+    if (!email) nextErrors.email = "O e-mail é obrigatório.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) nextErrors.email = "Informe um e-mail válido.";
+    if (!consent) nextErrors.consent = "O consentimento é obrigatório.";
 
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length) {
+      reportValidationErrors(nextErrors);
+      return;
+    }
 
     submittingRef.current = true;
     setSubmitState("submitting");
-
+    setSubmitError("");
     try {
       const attribution = readEcoAttribution();
-      await submitEcoLead({
-        firstName,
+      const result = await submitEcoLead({
+        name,
         email,
+        consent: true,
         attribution,
         sourceUrl: window.location.href,
+        userAgent: navigator.userAgent,
       });
-      trackEcoLead(attribution);
-      setSubmitState("success");
+      if (!result.duplicate && !leadTrackedRef.current) {
+        trackEcoEmailSubmitted(attribution);
+        leadTrackedRef.current = true;
+      }
+      setSubmitState(result.duplicate ? "duplicate" : "success");
       form.reset();
-    } catch {
+    } catch (error) {
+      const errorKind = error instanceof EcoLeadSubmissionError ? error.kind : "submission";
       setSubmitState("error");
+      setSubmitError(
+        errorKind === "configuration" && process.env.NODE_ENV !== "production"
+          ? "Endpoint de formulário não configurado."
+          : "Não foi possível registrar sua candidatura agora. Tente novamente em instantes.",
+      );
+      trackEcoFormError("form", errorKind);
     } finally {
       submittingRef.current = false;
     }
   }
+
+  const succeeded = submitState === "success" || submitState === "duplicate";
 
   return (
     <main id="eco-landing" className={styles.page} lang="pt-BR">
       <header className={styles.header}>
         <div className={styles.container}>
           <EcoBrand />
-          <div className={styles.protocol} aria-label="Status do protocolo">
-            <span>PROTOCOLO 74-B / SP / 25</span>
-            <span className={styles.status}>
-              <i aria-hidden="true" /> EM DESENVOLVIMENTO
-            </span>
+          <div className={styles.protocol} aria-label="Status do recrutamento">
+            <span>PROTOCOLO DE ADMISSÃO / SP</span>
+            <span className={styles.status}><i aria-hidden="true" /> {isClosed ? "FASE ENCERRADA" : "RECRUTAMENTO ATIVO"}</span>
           </div>
         </div>
       </header>
 
-      <section className={styles.hero} ref={heroRef} aria-labelledby="eco-title">
+      <section className={styles.hero} aria-labelledby="eco-title">
         <div className={`${styles.container} ${styles.heroGrid}`}>
           <div className={styles.heroCopy}>
-            <Eyebrow>CONVOCAÇÃO 74-B</Eyebrow>
-            <h1 id="eco-title">
-              A próxima correspondência
-              <span>não será comum.</span>
-            </h1>
-            <div className={styles.heroText}>
-              <p>
-                A E.C.O. está preparando uma experiência investigativa física e
-                digital, enviada diretamente para sua casa.
-              </p>
-              <p>
-                Examine documentos, investigue um caso entre o real e o
-                inexplicável e encontre o acesso para algo que oficialmente não
-                existe.
-              </p>
-            </div>
-            <button className={styles.primaryButton} type="button" onClick={scrollToForm}>
-              QUERO RECEBER A CONVOCAÇÃO <FiArrowRight aria-hidden="true" />
-            </button>
+            <Eyebrow>CLASSIFICAÇÃO: RESTRITO</Eyebrow>
+            <h1 id="eco-title">Uma organização que oficialmente não existe <span>está recrutando.</span></h1>
+            <p className={styles.heroText}>Participe gratuitamente da primeira etapa do processo de admissão da E.C.O. Analise os documentos, siga as instruções e descubra se sua candidatura será aceita.</p>
+            <button className={styles.primaryButton} type="button" onClick={scrollToForm}>INICIAR RECRUTAMENTO <FiArrowRight aria-hidden="true" /></button>
+            <p className={styles.microcopy}>Nenhum pagamento será solicitado nesta etapa.</p>
+            {ECO_RECRUITMENT_END_LABEL && (
+              <div className={styles.heroDeadline}>
+                <span>Esta janela de recrutamento será encerrada em:</span>
+                <strong aria-live="off">
+                  {countdown
+                    ? `${countdown.days} dias ${countdown.hours} horas ${countdown.minutes} minutos`
+                    : "Prazo em atualização"}
+                </strong>
+                <time>{`Inscrições abertas até ${ECO_RECRUITMENT_END_LABEL}.`}</time>
+              </div>
+            )}
           </div>
           <div className={styles.heroVisual}>
-            <Image
-              src="/eco/hero-dossier.webp"
-              width={1448}
-              height={1086}
-              priority
-              sizes="(max-width: 767px) 100vw, 62vw"
-              alt="Envelope da E.C.O. cercado por documentos, relatório, fotografia e ficha técnica do caso"
-            />
+            <Image src="/eco/hero-dossier.webp" width={1448} height={1086} priority sizes="(max-width: 767px) 110vw, 62vw" alt="Envelope e documentos confidenciais da E.C.O." />
           </div>
         </div>
       </section>
 
-      <section className={styles.intro} aria-labelledby="o-que-e">
-        <div className={styles.container}>
-          <div className={styles.sectionHeading}>
-            <Eyebrow>O QUE É</Eyebrow>
-            <h2 id="o-que-e">Um mistério<br />que começa no correio.</h2>
-            <p>
-              A primeira convocação da E.C.O. será uma experiência investigativa
-              composta por documentos físicos, evidências e um acesso oculto online.
-            </p>
+      <section className={styles.context} aria-labelledby="contexto-eco">
+        <div className={`${styles.container} ${styles.contextGrid}`}>
+          <Image className={styles.stamp} src="/eco/eco-stamp.webp" width={420} height={420} alt="Carimbo E.C.O., Encontrar, Conter, Ocultar" />
+          <div>
+            <Eyebrow>OBSERVAÇÃO PRELIMINAR</Eyebrow>
+            <h2 id="contexto-eco">A maioria das pessoas nunca percebe o que está acontecendo ao seu redor.</h2>
+            <p>Algumas percebem. Poucas sabem o que fazer com essa informação.</p>
+            <strong>A E.C.O. está procurando essas pessoas.</strong>
           </div>
-          <div className={styles.features}>
-            {features.map(({ icon: Icon, title, description }) => (
-              <article key={title} className={styles.feature}>
-                <Icon aria-hidden="true" />
-                <h3>{title}</h3>
-                <p>{description}</p>
+        </div>
+      </section>
+
+      <section className={styles.process} aria-labelledby="processo-eco">
+        <div className={styles.container}>
+          <div className={styles.sectionHeading}><Eyebrow>PROCESSO DE ADMISSÃO</Eyebrow><h2 id="processo-eco">O processo</h2></div>
+          <div className={styles.steps}>
+            {processSteps.map((step) => (
+              <article className={styles.step} key={step.number}>
+                <span>{step.number}</span><FiFileText aria-hidden="true" /><h3>{step.title}</h3><p>{step.text}</p>
               </article>
             ))}
           </div>
         </div>
       </section>
 
-      <section className={styles.institution} aria-labelledby="processo-74-b">
-        <div className={`${styles.container} ${styles.institutionGrid}`}>
-          <Image
-            className={styles.stamp}
-            src="/eco/eco-stamp.webp"
-            width={420}
-            height={420}
-            alt="Carimbo E.C.O., Encontrar, Conter, Ocultar, São Paulo, Brasil"
-          />
-          <div className={styles.institutionCopy}>
-            <Eyebrow>PROCESSO DE SELEÇÃO 74-B</Eyebrow>
-            <h2 id="processo-74-b">
-              A E.C.O. existe para encontrar, conter e ocultar ocorrências que não
-              deveriam fazer parte da realidade conhecida.
-            </h2>
-            <p>
-              Periodicamente, novos candidatos são convidados a analisar casos não
-              resolvidos.
-            </p>
-            <strong>A próxima seleção ainda não foi autorizada.</strong>
-          </div>
-          <Image
-            className={styles.watermark}
-            src="/eco/eco-emblem.webp"
-            width={480}
-            height={480}
-            alt=""
-            aria-hidden="true"
-          />
-        </div>
-      </section>
-
-      <section className={styles.signup} id="cadastro-eco" aria-labelledby="receba-aviso">
+      <section className={styles.signup} id="candidatura-eco" aria-labelledby="registrar-candidatura">
         <div className={`${styles.container} ${styles.signupGrid}`}>
           <div className={styles.signupCopy}>
-            <Eyebrow>RECEBA O AVISO</Eyebrow>
-            <h2 id="receba-aviso">Receba o aviso da<br />primeira convocação.</h2>
-            <div className={styles.priceCard} aria-label="Preço: 79 reais, envio incluído">
-              <span>R$</span>
-              <strong>79</strong>
-              <small>ENVIO INCLUÍDO</small>
+            <Eyebrow>REGISTRO CONFIDENCIAL</Eyebrow>
+            <h2 id="registrar-candidatura">Registrar candidatura</h2>
+            <p>A primeira etapa acontece online e é gratuita. Se sua candidatura avançar, as próximas instruções serão enviadas por e-mail.</p>
+            <div className={styles.deadlineNotice}>
+              Esta janela de recrutamento ficará aberta por tempo limitado.
+              {ECO_RECRUITMENT_END_LABEL && <strong>{` Inscrições abertas até ${ECO_RECRUITMENT_END_LABEL}.`}</strong>}
             </div>
-            <p>
-              A primeira convocação custará R$ 79, com envio incluído.
-            </p>
-            <p>
-              Cadastre-se para acompanhar o desenvolvimento e receber acesso
-              antecipado quando o Processo de Seleção 74-B começar.
-            </p>
           </div>
 
-          <form className={styles.form} onSubmit={handleSubmit} noValidate>
-            <div className={styles.field}>
-              <label htmlFor="eco-first-name">Primeiro nome</label>
-              <div className={styles.inputWrap}>
-                <FiUser aria-hidden="true" />
-                <input
-                  id="eco-first-name"
-                  name="firstName"
-                  type="text"
-                  autoComplete="given-name"
-                  placeholder="Primeiro nome"
-                  aria-invalid={Boolean(errors.firstName)}
-                  aria-describedby={errors.firstName ? "eco-name-error" : undefined}
-                />
+          <div className={styles.formPanel}>
+            {isClosed ? (
+              <div className={styles.closed} role="status"><span>STATUS: FASE ENCERRADA</span><h3>O recrutamento desta fase foi encerrado.</h3><p>Novas instruções serão divulgadas quando uma próxima janela de seleção for autorizada.</p></div>
+            ) : succeeded ? (
+              <div className={styles.confirmation} role="status" aria-live="polite">
+                <span><FiCheck aria-hidden="true" /> STATUS: CANDIDATURA RECEBIDA</span>
+                <h3>{submitState === "duplicate" ? "Sua candidatura já está registrada." : "Sua candidatura foi registrada."}</h3>
+                <p>As próximas instruções serão enviadas para o e-mail informado. Verifique também as pastas de spam e promoções.</p>
+                <strong>Não compartilhe instruções, documentos ou códigos recebidos durante o processo.</strong>
               </div>
-              {errors.firstName && <p id="eco-name-error" className={styles.fieldError}>{errors.firstName}</p>}
-            </div>
-
-            <div className={styles.field}>
-              <label htmlFor="eco-email">E-mail</label>
-              <div className={styles.inputWrap}>
-                <FiMail aria-hidden="true" />
-                <input
-                  id="eco-email"
-                  name="email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  placeholder="E-mail"
-                  aria-invalid={Boolean(errors.email)}
-                  aria-describedby={errors.email ? "eco-email-error" : undefined}
-                />
-              </div>
-              {errors.email && <p id="eco-email-error" className={styles.fieldError}>{errors.email}</p>}
-            </div>
-
-            <button
-              className={styles.submitButton}
-              type="submit"
-              disabled={submitState === "submitting" || submitState === "success"}
-            >
-              {submitState === "submitting" ? "REGISTRANDO..." : "ENTRAR NA LISTA DE CANDIDATOS"}
-              <FiArrowRight aria-hidden="true" />
-            </button>
-
-            <p className={styles.disclaimer} id="eco-form-disclaimer">
-              <FiShield aria-hidden="true" />
-              <span>
-                O cadastro não representa compra, assinatura ou aprovação no processo.
-                Ao se cadastrar, você confirma que tem interesse em receber a primeira
-                convocação pelo valor de R$ 79, com envio incluído.
-              </span>
-            </p>
-
-            <div className={styles.formStatus} role="status" aria-live="polite">
-              {submitState === "success" && (
-                <p className={styles.success}>
-                  <strong>Cadastro recebido.</strong>
-                  Se a primeira convocação for autorizada, a E.C.O. entrará em contato.
-                </p>
-              )}
-              {submitState === "error" && (
-                <p className={styles.error}>
-                  Não foi possível registrar seu cadastro. Tente novamente em instantes.
-                </p>
-              )}
-            </div>
-          </form>
+            ) : (
+              <form className={styles.form} onSubmit={handleSubmit} onFocusCapture={trackEcoFormStarted} noValidate>
+                <div className={styles.field}>
+                  <label htmlFor="eco-name">Nome</label>
+                  <div className={styles.inputWrap}><FiUser aria-hidden="true" /><input id="eco-name" name="name" type="text" autoComplete="name" placeholder="Nome" minLength={2} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? "eco-name-error" : undefined} /></div>
+                  {errors.name && <p id="eco-name-error" className={styles.fieldError}>{errors.name}</p>}
+                </div>
+                <div className={styles.field}>
+                  <label htmlFor="eco-email">E-mail</label>
+                  <div className={styles.inputWrap}><FiMail aria-hidden="true" /><input id="eco-email" name="email" type="email" inputMode="email" autoComplete="email" placeholder="E-mail" aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? "eco-email-error" : undefined} /></div>
+                  {errors.email && <p id="eco-email-error" className={styles.fieldError}>{errors.email}</p>}
+                </div>
+                <div className={styles.consentField}>
+                  <input id="eco-consent" name="consent" type="checkbox" aria-invalid={Boolean(errors.consent)} aria-describedby={errors.consent ? "eco-consent-error" : "eco-privacy-note"} />
+                  <label htmlFor="eco-consent">Concordo em receber comunicações relacionadas ao processo de recrutamento da E.C.O.</label>
+                </div>
+                {errors.consent && <p id="eco-consent-error" className={styles.fieldError}>{errors.consent}</p>}
+                <p id="eco-privacy-note" className={styles.privacyNote}><FiShield aria-hidden="true" /> Seus dados serão tratados conforme a <Link href="/privacy-policy/">política de privacidade</Link>.</p>
+                <button className={styles.submitButton} type="submit" disabled={submitState === "submitting"}>{submitState === "submitting" ? "ENVIANDO..." : "ENVIAR CANDIDATURA"}<FiArrowRight aria-hidden="true" /></button>
+                <div className={styles.formStatus} role="alert" aria-live="polite">{submitState === "error" && <p>{submitError}</p>}</div>
+              </form>
+            )}
+          </div>
         </div>
       </section>
 
-      <footer className={styles.footer}>
-        <div className={`${styles.container} ${styles.footerInner}`}>
-          <EcoBrand compact />
-          <div className={styles.liberulaCredit}>
-            <span>Uma experiência em desenvolvimento pela</span>
-            <Image
-              src="/eco/liberula-mark.svg"
-              width={42}
-              height={42}
-              alt="Liberula"
-            />
-            <strong>LIBERULA</strong>
-          </div>
-        </div>
-      </footer>
+      <footer className={styles.footer}><div className={`${styles.container} ${styles.footerInner}`}><EcoBrand compact /><div className={styles.liberulaCredit}><span>Uma experiência da</span><Image src="/eco/liberula-mark.svg" width={42} height={42} alt="Liberula" /><strong>LIBERULA</strong></div></div></footer>
     </main>
   );
 }

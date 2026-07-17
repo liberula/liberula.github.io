@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import EcoLanding from "./EcoLanding";
 
-const title = "E.C.O. | Processo de Seleção 74-B";
+const title = "Recrutamento E.C.O. | Processo de Admissão";
 const description =
-  "Uma experiência investigativa física e digital enviada diretamente para sua casa. Entre na lista da primeira convocação da E.C.O.";
+  "Participe gratuitamente da primeira etapa do processo de recrutamento da E.C.O. Analise as instruções e descubra se sua candidatura será aceita.";
 
 export const metadata: Metadata = {
   title,
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
         url: "https://liberula.com/eco/eco-og.png",
         width: 1440,
         height: 900,
-        alt: "Landing da primeira convocação da E.C.O.",
+        alt: "Documentos confidenciais do processo de recrutamento da E.C.O.",
       },
     ],
   },

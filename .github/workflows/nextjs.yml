@@ -66,15 +66,16 @@ jobs:
       - name: Validate public configuration
         shell: bash
         env:
-          NEXT_PUBLIC_ECO_LEAD_ENDPOINT: ${{ vars.NEXT_PUBLIC_ECO_LEAD_ENDPOINT }}
+          NEXT_PUBLIC_ECO_FORM_ENDPOINT: ${{ vars.NEXT_PUBLIC_ECO_FORM_ENDPOINT }}
         run: |
-          if [ -z "$NEXT_PUBLIC_ECO_LEAD_ENDPOINT" ]; then
-            echo "NEXT_PUBLIC_ECO_LEAD_ENDPOINT is not configured"
+          if [ -z "$NEXT_PUBLIC_ECO_FORM_ENDPOINT" ]; then
+            echo "NEXT_PUBLIC_ECO_FORM_ENDPOINT is not configured"
             exit 1
           fi
       - name: Build with Next.js
         env:
-          NEXT_PUBLIC_ECO_LEAD_ENDPOINT: ${{ vars.NEXT_PUBLIC_ECO_LEAD_ENDPOINT }}
+          NEXT_PUBLIC_ECO_FORM_ENDPOINT: ${{ vars.NEXT_PUBLIC_ECO_FORM_ENDPOINT }}
+          NEXT_PUBLIC_ECO_RECRUITMENT_END_AT: ${{ vars.NEXT_PUBLIC_ECO_RECRUITMENT_END_AT }}
           NEXT_PUBLIC_META_PIXEL_ID: ${{ vars.NEXT_PUBLIC_META_PIXEL_ID }}
           NEXT_PUBLIC_POSTHOG_KEY: ${{ vars.NEXT_PUBLIC_POSTHOG_KEY }}
           NEXT_PUBLIC_POSTHOG_HOST: ${{ vars.NEXT_PUBLIC_POSTHOG_HOST }}

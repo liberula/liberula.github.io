@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+html:has(#eco-landing),
+body:has(#eco-landing) {
+  background: #050505;
+}
+
 .home-shape-1 {
   height: 150px;
   width: 150px;
@@ -24,4 +36,3 @@
       url(/fonts/Roboto-Regular.ttf) format('tff'),
   }
 }
-
