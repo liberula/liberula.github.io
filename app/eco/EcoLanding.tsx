@@ -98,6 +98,7 @@ export default function EcoLanding() {
     const name = String(formData.get("name") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
     const consent = formData.get("consent") === "on";
+    const website = String(formData.get("website") ?? "");
     const nextErrors: FormErrors = {};
 
     if (name.length < 2) nextErrors.name = "Informe um nome com pelo menos 2 caracteres.";
@@ -120,6 +121,7 @@ export default function EcoLanding() {
         name,
         email,
         consent: true,
+        website,
         attribution,
         sourceUrl: window.location.href,
         userAgent: navigator.userAgent,
@@ -233,6 +235,10 @@ export default function EcoLanding() {
               </div>
             ) : (
               <form className={styles.form} onSubmit={handleSubmit} onFocusCapture={trackEcoFormStarted} noValidate>
+                <div className={styles.honeypot} aria-hidden="true">
+                  <label htmlFor="eco-website">Website</label>
+                  <input id="eco-website" name="website" type="text" autoComplete="off" tabIndex={-1} />
+                </div>
                 <div className={styles.field}>
                   <label htmlFor="eco-name">Nome</label>
                   <div className={styles.inputWrap}><FiUser aria-hidden="true" /><input id="eco-name" name="name" type="text" autoComplete="name" placeholder="Nome" minLength={2} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? "eco-name-error" : undefined} /></div>

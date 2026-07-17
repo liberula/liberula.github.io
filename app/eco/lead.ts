@@ -19,6 +19,7 @@ export type EcoLeadInput = {
   name: string;
   email: string;
   consent: true;
+  website: string;
   attribution: EcoAttribution;
   sourceUrl: string;
   userAgent: string;
@@ -39,6 +40,7 @@ export type EcoLeadPayload = {
   source_url: string;
   submitted_at: string;
   user_agent: string;
+  website: string;
 };
 
 export type EcoLeadResult = { duplicate: boolean };
@@ -56,6 +58,8 @@ export class EcoLeadSubmissionError extends Error {
 }
 
 type ServiceResponse = {
+  success?: boolean;
+  ok?: boolean;
   code?: string;
   error?: string;
   message?: string;
@@ -103,6 +107,7 @@ export async function submitEcoLead(data: EcoLeadInput): Promise<EcoLeadResult> 
     source_url: data.sourceUrl,
     submitted_at: new Date().toISOString(),
     user_agent: data.userAgent,
+    website: data.website,
   };
 
   let response: Response;
@@ -117,11 +122,17 @@ export async function submitEcoLead(data: EcoLeadInput): Promise<EcoLeadResult> 
   }
 
   const body = await readResponse(response);
-  if (isDuplicate(body)) return { duplicate: true };
   if (!response.ok) {
     throw new EcoLeadSubmissionError("Lead submission failed", "submission", response.status);
   }
-  return { duplicate: false };
+  if (body.success === true) return { duplicate: isDuplicate(body) };
+
+  // Keep rollback-by-URL compatible with Formspree while it remains the old endpoint.
+  const isLegacyFormspree = (() => {
+    try { return new URL(leadEndpoint).hostname === "formspree.io"; } catch { return false; }
+  })();
+  if (isLegacyFormspree && body.ok === true) return { duplicate: isDuplicate(body) };
+  throw new EcoLeadSubmissionError("Lead submission was not confirmed", "submission", response.status);
 }
 
 export function readEcoAttribution(): EcoAttribution {
