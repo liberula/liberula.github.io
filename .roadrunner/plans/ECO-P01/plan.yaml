@@ -1,0 +1,11 @@
+id: ECO-P01
+title: ECO Case 001 sandbox purchase flow
+
+steps:
+  - ticket: T001
+  - ticket: T002
+  - ticket: T003
+  - ticket: T004
+  - checkpoint:
+      id: CP001
+      title: Validate complete sandbox flow
