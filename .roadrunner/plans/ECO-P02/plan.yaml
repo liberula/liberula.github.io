@@ -1,0 +1,9 @@
+id: ECO-P02
+title: ECO Case 001 Supabase sandbox backend
+
+steps:
+  - ticket: T001
+  - ticket: T002
+  - checkpoint:
+      id: CP001
+      title: Validate complete Supabase and Mercado Pago sandbox flow
