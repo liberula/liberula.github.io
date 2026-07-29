@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildOrderEndpoint,
   createOrderRequest,
-  ORDER_ENDPOINT,
   parseOrderResponse,
 } from "../app/eco/eco-sp-001/checkout-contract.mjs";
 
@@ -21,8 +21,13 @@ const buyer = {
   },
 };
 
-test("uses the future same-origin order endpoint", () => {
-  assert.equal(ORDER_ENDPOINT, "/api/eco/eco-sp-001/orders");
+test("builds the order endpoint from the configured API base URL", () => {
+  assert.equal(
+    buildOrderEndpoint(
+      "https://project.supabase.co/functions/v1/eco-sp-001-api/",
+    ),
+    "https://project.supabase.co/functions/v1/eco-sp-001-api/orders",
+  );
 });
 
 test("order request contains only buyer data", () => {

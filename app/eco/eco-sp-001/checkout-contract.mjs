@@ -1,4 +1,4 @@
-export const ORDER_ENDPOINT = "/api/eco/eco-sp-001/orders";
+export { buildOrderEndpoint } from "./eco-api-contract.mjs";
 
 const SANDBOX_CHECKOUT_HOSTS = new Set([
   "sandbox.mercadopago.com",

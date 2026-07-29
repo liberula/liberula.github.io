@@ -14,10 +14,10 @@ export function parseOrderReference(value) {
   return ORDER_REFERENCE_PATTERN.test(normalized) ? normalized : null;
 }
 
-export function buildStatusEndpoint(orderReference) {
+export function buildStatusEndpoint(baseUrl, orderReference) {
   const parsedReference = parseOrderReference(orderReference);
   if (!parsedReference) return null;
-  return `/api/eco/eco-sp-001/orders/${encodeURIComponent(parsedReference)}/status`;
+  return buildOrderStatusEndpoint(baseUrl, parsedReference);
 }
 
 export function parseOrderStatusResponse(value) {
@@ -37,3 +37,4 @@ export function parseOrderStatusResponse(value) {
 
   return { status: value.status, updatedAt };
 }
+import { buildOrderStatusEndpoint } from "./eco-api-contract.mjs";

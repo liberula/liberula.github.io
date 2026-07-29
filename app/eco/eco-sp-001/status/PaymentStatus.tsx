@@ -81,6 +81,7 @@ const statusContent: Record<
 
 const MAX_AUTOMATIC_POLLS = 12;
 const POLL_INTERVAL_MS = 5_000;
+const ECO_API_BASE_URL = process.env.NEXT_PUBLIC_ECO_API_BASE_URL;
 
 export default function PaymentStatusView() {
   const searchParams = useSearchParams();
@@ -101,7 +102,7 @@ export default function PaymentStatusView() {
       return;
     }
 
-    const endpoint = buildStatusEndpoint(orderReference);
+    const endpoint = buildStatusEndpoint(ECO_API_BASE_URL, orderReference);
     if (!endpoint) {
       setPhase("invalid");
       return;

@@ -8,12 +8,14 @@ import {
 } from "../app/eco/eco-sp-001/payment-status-contract.mjs";
 
 const reference = "order_01J123456789ABCDEFGH";
+const apiBaseUrl =
+  "https://project.supabase.co/functions/v1/eco-sp-001-api";
 
-test("accepts an opaque order reference and builds a same-origin endpoint", () => {
+test("accepts an opaque order reference and builds a configured API endpoint", () => {
   assert.equal(parseOrderReference(reference), reference);
   assert.equal(
-    buildStatusEndpoint(reference),
-    `/api/eco/eco-sp-001/orders/${reference}/status`,
+    buildStatusEndpoint(apiBaseUrl, reference),
+    `${apiBaseUrl}/orders/${reference}/status`,
   );
 });
 
@@ -27,7 +29,7 @@ for (const invalid of [
 ]) {
   test(`rejects invalid order reference ${JSON.stringify(invalid)}`, () => {
     assert.equal(parseOrderReference(invalid), null);
-    assert.equal(buildStatusEndpoint(invalid), null);
+    assert.equal(buildStatusEndpoint(apiBaseUrl, invalid), null);
   });
 }
 
@@ -84,7 +86,7 @@ test("a checkout query status is not part of the status endpoint", () => {
     collection_status: "approved",
   });
   assert.equal(
-    buildStatusEndpoint(params.get("order")),
-    `/api/eco/eco-sp-001/orders/${reference}/status`,
+    buildStatusEndpoint(apiBaseUrl, params.get("order")),
+    `${apiBaseUrl}/orders/${reference}/status`,
   );
 });

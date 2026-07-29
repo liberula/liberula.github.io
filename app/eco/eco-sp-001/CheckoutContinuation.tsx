@@ -5,13 +5,15 @@ import { FiArrowRight, FiCheck, FiLoader, FiRefreshCw } from "react-icons/fi";
 import { safePosthogCapture } from "../../analytics/posthog";
 import type { BuyerPayload } from "./BuyerForm";
 import {
+  buildOrderEndpoint,
   createOrderRequest,
-  ORDER_ENDPOINT,
   parseOrderResponse,
 } from "./checkout-contract.mjs";
 import styles from "./EcoCase.module.css";
 
 type CheckoutState = "ready" | "submitting" | "failure";
+
+const ECO_API_BASE_URL = process.env.NEXT_PUBLIC_ECO_API_BASE_URL;
 
 function createIdempotencyKey(): string {
   return globalThis.crypto.randomUUID();
@@ -38,7 +40,10 @@ export default function CheckoutContinuation({
       const idempotencyKey =
         idempotencyKeyRef.current ?? createIdempotencyKey();
       idempotencyKeyRef.current = idempotencyKey;
-      const response = await fetch(ORDER_ENDPOINT, {
+      const orderEndpoint = buildOrderEndpoint(ECO_API_BASE_URL);
+      if (!orderEndpoint) throw new Error("checkout_not_configured");
+
+      const response = await fetch(orderEndpoint, {
         method: "POST",
         headers: {
           Accept: "application/json",

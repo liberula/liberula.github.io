@@ -5,9 +5,10 @@ import { FiArrowRight, FiCheck, FiLoader, FiRefreshCw } from "react-icons/fi";
 import { safePosthogCapture } from "../../analytics/posthog";
 import { normalizeAnswer } from "./answer-normalization.mjs";
 import BuyerForm from "./BuyerForm";
+import { buildValidationEndpoint } from "./eco-api-contract.mjs";
 import styles from "./EcoCase.module.css";
 
-const VALIDATION_ENDPOINT = "/api/eco/eco-sp-001/validate";
+const ECO_API_BASE_URL = process.env.NEXT_PUBLIC_ECO_API_BASE_URL;
 
 type SubmissionState =
   | "initial"
@@ -63,7 +64,10 @@ export default function CaseAnswerForm() {
     });
 
     try {
-      const response = await fetch(VALIDATION_ENDPOINT, {
+      const validationEndpoint = buildValidationEndpoint(ECO_API_BASE_URL);
+      if (!validationEndpoint) throw new Error("validation_not_configured");
+
+      const response = await fetch(validationEndpoint, {
         method: "POST",
         headers: {
           Accept: "application/json",
