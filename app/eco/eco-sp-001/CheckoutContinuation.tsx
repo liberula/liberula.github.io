@@ -21,8 +21,10 @@ function createIdempotencyKey(): string {
 
 export default function CheckoutContinuation({
   buyer,
+  referralCode,
 }: {
   buyer: BuyerPayload;
+  referralCode: string | null;
 }) {
   const [state, setState] = useState<CheckoutState>("ready");
   const idempotencyKeyRef = useRef<string | null>(null);
@@ -50,12 +52,19 @@ export default function CheckoutContinuation({
           "Content-Type": "application/json",
           "Idempotency-Key": idempotencyKey,
         },
-        body: JSON.stringify(createOrderRequest(buyer)),
+        body: JSON.stringify(createOrderRequest(buyer, referralCode)),
       });
       const body: unknown = await response.json().catch(() => null);
       const order = response.ok ? parseOrderResponse(body) : null;
       if (!order) throw new Error("checkout_unavailable");
 
+      if (order.referralAttributed) {
+        safePosthogCapture("eco_referral_order_created", {
+          case_id: "eco-sp-001",
+          campaign_id: "eco-sp-001-founder",
+          has_referral: true,
+        });
+      }
       safePosthogCapture("eco_checkout_redirected", {
         case_id: "eco-sp-001",
       });

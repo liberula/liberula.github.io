@@ -1,0 +1,19 @@
+
+D:\Liberula\liberula.github.io>echo "Loading yt-dlp aliases" 
+"Loading yt-dlp aliases"
+
+D:\Liberula\liberula.github.io>doskey getvid=yt-dlp -S "height:1080" $* 
+
+D:\Liberula\liberula.github.io>doskey getfullvid=yt-dlp -S "height:1080" -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio" $* 
+
+D:\Liberula\liberula.github.io>doskey getaudio=yt-dlp --no-part -x --audio-format mp3 -o "(ext)s" $* 
+
+> liberula@0.1.0 dev
+> next dev -p 3013
+
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3013
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1949ms

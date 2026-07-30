@@ -3,3 +3,9 @@ verify_jwt = false
 
 [functions.lead-submit]
 verify_jwt = false
+
+[functions.eco-sp-001-api]
+verify_jwt = false
+
+[functions.eco-sp-001-mercado-pago-webhook]
+verify_jwt = false

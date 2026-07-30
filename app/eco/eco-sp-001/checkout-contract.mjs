@@ -11,21 +11,35 @@ function isPlainObject(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
-export function createOrderRequest(buyer) {
-  return { buyer };
+import { normalizeReferralCode } from "./campaign-contract.mjs";
+
+/**
+ * @param {unknown} buyer
+ * @param {string | null} referralCode
+ */
+export function createOrderRequest(buyer, referralCode = null) {
+  const normalizedReferral = normalizeReferralCode(referralCode);
+  return normalizedReferral
+    ? { buyer, referralCode: normalizedReferral }
+    : { buyer };
 }
 
 export function parseOrderResponse(value) {
   if (!isPlainObject(value)) return null;
   if (
     typeof value.checkoutUrl !== "string" ||
-    typeof value.orderReference !== "string"
+    typeof value.orderReference !== "string" ||
+    typeof value.referralCode !== "string" ||
+    typeof value.referralAttributed !== "boolean"
   ) {
     return null;
   }
 
   const orderReference = value.orderReference.trim();
-  if (!orderReference || orderReference.length > 200) return null;
+  const referralCode = normalizeReferralCode(value.referralCode);
+  if (!orderReference || orderReference.length > 200 || !referralCode) {
+    return null;
+  }
 
   try {
     const checkoutUrl = new URL(value.checkoutUrl);
@@ -35,7 +49,12 @@ export function parseOrderResponse(value) {
     ) {
       return null;
     }
-    return { checkoutUrl: checkoutUrl.toString(), orderReference };
+    return {
+      checkoutUrl: checkoutUrl.toString(),
+      orderReference,
+      referralCode,
+      referralAttributed: value.referralAttributed,
+    };
   } catch {
     return null;
   }

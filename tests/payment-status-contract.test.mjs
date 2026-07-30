@@ -38,6 +38,7 @@ for (const status of ORDER_STATUSES) {
     assert.deepEqual(parseOrderStatusResponse({ status }), {
       status,
       updatedAt: null,
+      referralCode: null,
     });
   });
 }
@@ -47,10 +48,12 @@ test("accepts a valid server update timestamp", () => {
     parseOrderStatusResponse({
       status: "paid",
       updatedAt: "2026-08-01T12:30:00.000Z",
+      referralCode: "AB7C09DE12FF",
     }),
     {
       status: "paid",
       updatedAt: "2026-08-01T12:30:00.000Z",
+      referralCode: "AB7C09DE12FF",
     },
   );
 });
@@ -62,8 +65,13 @@ test("does not expose extra response fields", () => {
       updatedAt: null,
       buyerEmail: "private@example.com",
       amount: 79.9,
+      referralCode: "AB7C09DE12FF",
     }),
-    { status: "paid", updatedAt: null },
+    {
+      status: "paid",
+      updatedAt: null,
+      referralCode: "AB7C09DE12FF",
+    },
   );
 });
 

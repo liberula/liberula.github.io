@@ -35,17 +35,29 @@ test("order request contains only buyer data", () => {
   assert.deepEqual(Object.keys(createOrderRequest(buyer)), ["buyer"]);
 });
 
+test("order request optionally includes one normalized referral code", () => {
+  assert.deepEqual(createOrderRequest(buyer, "  ab7c09de12ff "), {
+    buyer,
+    referralCode: "AB7C09DE12FF",
+  });
+  assert.deepEqual(createOrderRequest(buyer, "invalid"), { buyer });
+});
+
 test("accepts an official Mercado Pago sandbox checkout response", () => {
   assert.deepEqual(
     parseOrderResponse({
       checkoutUrl:
         "https://sandbox.mercadopago.com/mla/checkout/pay?pref_id=test",
       orderReference: "opaque-order-reference",
+      referralCode: "AB7C09DE12FF",
+      referralAttributed: true,
     }),
     {
       checkoutUrl:
         "https://sandbox.mercadopago.com/mla/checkout/pay?pref_id=test",
       orderReference: "opaque-order-reference",
+      referralCode: "AB7C09DE12FF",
+      referralAttributed: true,
     },
   );
 });
@@ -56,6 +68,8 @@ test("accepts the Brazilian sandbox hostname", () => {
       checkoutUrl:
         "https://sandbox.mercadopago.com.br/checkout/v1/redirect?pref_id=test",
       orderReference: "opaque-order-reference",
+      referralCode: "AB7C09DE12FF",
+      referralAttributed: false,
     }),
   );
 });

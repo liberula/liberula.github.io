@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, type RefObject } from "react";
 import { FiArrowRight, FiMapPin, FiShield } from "react-icons/fi";
 import { safePosthogCapture } from "../../analytics/posthog";
 import { validateBuyerInput } from "./buyer-validation.mjs";
@@ -128,7 +128,13 @@ function inputFromForm(formData: FormData) {
   );
 }
 
-export default function BuyerForm() {
+export default function BuyerForm({
+  headingRef,
+  referralCode,
+}: {
+  headingRef?: RefObject<HTMLHeadingElement>;
+  referralCode?: string | null;
+} = {}) {
   const [errors, setErrors] = useState<BuyerErrors>({});
   const [preparedPayload, setPreparedPayload] = useState<BuyerPayload | null>(
     null,
@@ -164,13 +170,20 @@ export default function BuyerForm() {
   }
 
   if (preparedPayload) {
-    return <CheckoutContinuation buyer={preparedPayload} />;
+    return (
+      <CheckoutContinuation
+        buyer={preparedPayload}
+        referralCode={referralCode ?? null}
+      />
+    );
   }
 
   return (
     <form className={styles.buyerForm} onSubmit={handleSubmit} noValidate>
       <div className={styles.formSectionHeading}>
-        <h3>Dados do comprador</h3>
+        <h3 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
+          Dados do comprador
+        </h3>
         <p>Preencha os dados necessários para preparar a futura continuação.</p>
       </div>
 

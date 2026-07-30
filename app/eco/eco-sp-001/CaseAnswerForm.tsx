@@ -1,10 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { FiArrowRight, FiCheck, FiLoader, FiRefreshCw } from "react-icons/fi";
+import { FiArrowRight, FiLoader, FiRefreshCw } from "react-icons/fi";
 import { safePosthogCapture } from "../../analytics/posthog";
 import { normalizeAnswer } from "./answer-normalization.mjs";
-import BuyerForm from "./BuyerForm";
 import { buildValidationEndpoint } from "./eco-api-contract.mjs";
 import styles from "./EcoCase.module.css";
 
@@ -31,7 +30,11 @@ async function readValidationResponse(
   }
 }
 
-export default function CaseAnswerForm() {
+export default function CaseAnswerForm({
+  onCorrect,
+}: {
+  onCorrect: () => void;
+}) {
   const [answer, setAnswer] = useState("");
   const [state, setState] = useState<SubmissionState>("initial");
   const [fieldError, setFieldError] = useState("");
@@ -86,6 +89,7 @@ export default function CaseAnswerForm() {
         safePosthogCapture("eco_case_answer_correct", {
           case_id: "eco-sp-001",
         });
+        onCorrect();
       } else {
         setState("incorrect");
         safePosthogCapture("eco_case_answer_incorrect", {
@@ -104,51 +108,7 @@ export default function CaseAnswerForm() {
   }
 
   if (state === "correct") {
-    return (
-      <section
-        className={`${styles.panel} ${styles.successPanel} ${styles.offerPanel}`}
-        aria-labelledby="eco-case-success-title"
-      >
-        <div role="status">
-          <span className={styles.statusLabel}>
-            <FiCheck aria-hidden="true" /> ANÁLISE CONFIRMADA
-          </span>
-          <h2 id="eco-case-success-title">Conclusão aceita.</h2>
-          <p>
-            Você concluiu o caso e pode conhecer a oferta provisória do lote
-            fundador.
-          </p>
-        </div>
-
-        <div className={styles.offer} aria-labelledby="eco-founder-offer-title">
-          <p className={styles.protocol}>LOTE FUNDADOR / OFERTA PROVISÓRIA</p>
-          <h3 id="eco-founder-offer-title">Lote fundador ECO-SP-001</h3>
-          <strong className={styles.price}>R$ 79,90</strong>
-          <dl className={styles.offerFacts}>
-            <div>
-              <dt>Meta do lote</dt>
-              <dd>100 compradores</dd>
-            </div>
-            <div>
-              <dt>Encerramento</dt>
-              <dd>
-                <time dateTime="2026-08-31">31/08/2026</time>
-              </dd>
-            </div>
-            <div>
-              <dt>Entrega estimada</dt>
-              <dd>15 dias</dd>
-            </div>
-          </dl>
-          <p className={styles.provisionalNote}>
-            Esta apresentação é provisória. As condições finais serão exibidas
-            antes de qualquer pagamento.
-          </p>
-        </div>
-
-        <BuyerForm />
-      </section>
-    );
+    return null;
   }
 
   const describedBy = [

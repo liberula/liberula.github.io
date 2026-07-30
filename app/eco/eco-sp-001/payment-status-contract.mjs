@@ -35,6 +35,12 @@ export function parseOrderStatusResponse(value) {
     updatedAt = value.updatedAt;
   }
 
-  return { status: value.status, updatedAt };
+  const referralCode = value.referralCode === undefined
+    ? null
+    : normalizeReferralCode(value.referralCode);
+  if (value.referralCode !== undefined && !referralCode) return null;
+
+  return { status: value.status, updatedAt, referralCode };
 }
 import { buildOrderStatusEndpoint } from "./eco-api-contract.mjs";
+import { normalizeReferralCode } from "./campaign-contract.mjs";

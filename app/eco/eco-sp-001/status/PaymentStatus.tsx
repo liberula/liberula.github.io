@@ -16,6 +16,7 @@ import {
   parseOrderReference,
   parseOrderStatusResponse,
 } from "../payment-status-contract.mjs";
+import ShareControls from "../ShareControls";
 import styles from "../EcoCase.module.css";
 
 type PaymentStatus =
@@ -94,6 +95,7 @@ export default function PaymentStatusView() {
   );
   const [status, setStatus] = useState<PaymentStatus | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -131,6 +133,7 @@ export default function PaymentStatusView() {
         const nextStatus = result.status as PaymentStatus;
         setStatus(nextStatus);
         setUpdatedAt(result.updatedAt);
+        setReferralCode(result.referralCode);
         setPhase("ready");
         safePosthogCapture("eco_payment_status_viewed", {
           case_id: "eco-sp-001",
@@ -208,32 +211,43 @@ export default function PaymentStatusView() {
   const StatusIcon = content.icon;
 
   return (
-    <section className={`${styles.statusCard} ${content.tone}`} role="status">
-      <StatusIcon className={styles.statusIcon} aria-hidden="true" />
-      <p className={styles.protocol}>{content.label}</p>
-      <h1>{content.title}</h1>
-      <p>{content.description}</p>
-      {updatedAt && (
-        <p className={styles.statusTimestamp}>
-          Última atualização:{" "}
-          <time dateTime={updatedAt}>
-            {new Intl.DateTimeFormat("pt-BR", {
-              dateStyle: "short",
-              timeStyle: "short",
-            }).format(new Date(updatedAt))}
-          </time>
-        </p>
+    <>
+      <section className={`${styles.statusCard} ${content.tone}`} role="status">
+        <StatusIcon className={styles.statusIcon} aria-hidden="true" />
+        <p className={styles.protocol}>{content.label}</p>
+        <h1>{content.title}</h1>
+        <p>{content.description}</p>
+        {updatedAt && (
+          <p className={styles.statusTimestamp}>
+            Última atualização:{" "}
+            <time dateTime={updatedAt}>
+              {new Intl.DateTimeFormat("pt-BR", {
+                dateStyle: "short",
+                timeStyle: "short",
+              }).format(new Date(updatedAt))}
+            </time>
+          </p>
+        )}
+        {status === "pending" && (
+          <button
+            className={styles.statusRefreshButton}
+            type="button"
+            onClick={() => setRefreshKey((current) => current + 1)}
+          >
+            <FiRefreshCw aria-hidden="true" /> ATUALIZAR AGORA
+          </button>
+        )}
+      </section>
+      {referralCode && (status === "pending" || status === "paid") && (
+        <div className={styles.statusShare}>
+          <ShareControls
+            variant={status === "paid" ? "personal_paid" : "personal_pending"}
+            referralCode={referralCode}
+            campaignState={null}
+          />
+        </div>
       )}
-      {status === "pending" && (
-        <button
-          className={styles.statusRefreshButton}
-          type="button"
-          onClick={() => setRefreshKey((current) => current + 1)}
-        >
-          <FiRefreshCw aria-hidden="true" /> ATUALIZAR AGORA
-        </button>
-      )}
-    </section>
+    </>
   );
 }
 

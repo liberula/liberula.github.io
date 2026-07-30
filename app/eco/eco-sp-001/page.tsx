@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import CaseAnswerForm from "./CaseAnswerForm";
+import EcoCaseExperience from "./EcoCaseExperience";
 import styles from "./EcoCase.module.css";
 
 const title = "Caso ECO-SP-001 | E.C.O.";
@@ -42,25 +42,7 @@ export default function EcoSp001Page() {
       </header>
 
       <div className={`${styles.container} ${styles.content}`}>
-        <article className={styles.briefing}>
-          <p className={styles.eyebrow}>ARQUIVO DE INVESTIGAÇÃO / SÃO PAULO</p>
-          <h1>Onde as evidências convergem?</h1>
-          <p className={styles.lead}>
-            Você recebeu um conjunto de indícios vinculados a uma ocorrência na
-            cidade de São Paulo. Examine o material disponibilizado, identifique
-            o estabelecimento e registre sua conclusão.
-          </p>
-
-          <section className={styles.dossier} aria-labelledby="case-directive">
-            <h2 id="case-directive">DIRETRIZ OPERACIONAL</h2>
-            <p>
-              Informe o nome do local com a maior precisão possível. Variações de
-              caixa, acentuação e espaçamento não alteram a análise.
-            </p>
-          </section>
-        </article>
-
-        <CaseAnswerForm />
+        <EcoCaseExperience />
       </div>
     </main>
   );

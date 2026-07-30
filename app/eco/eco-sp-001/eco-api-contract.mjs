@@ -1,6 +1,7 @@
 const ECO_API_PATHS = {
   validation: "validate",
   orders: "orders",
+  campaignProgress: "campaign-progress",
 };
 
 function normalizeApiBaseUrl(value) {
@@ -40,6 +41,10 @@ export function buildValidationEndpoint(baseUrl) {
 
 export function buildOrderEndpoint(baseUrl) {
   return buildEndpoint(baseUrl, ECO_API_PATHS.orders);
+}
+
+export function buildCampaignProgressEndpoint(baseUrl) {
+  return buildEndpoint(baseUrl, ECO_API_PATHS.campaignProgress);
 }
 
 export function buildOrderStatusEndpoint(baseUrl, orderReference) {
