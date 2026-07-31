@@ -12,3 +12,6 @@ verify_jwt = false
 
 [functions.eco-participant-ingest]
 verify_jwt = false
+
+[functions.eco-case-delivery]
+verify_jwt = false

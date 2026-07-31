@@ -19,15 +19,17 @@ export function PostHogProvider({
   children,
 }: PostHogProviderProps) {
   const pathname = usePathname();
+  const isInternalRoute = pathname?.startsWith("/internal/") ?? false;
 
   useLayoutEffect(() => {
+    if (isInternalRoute) return;
     initializePosthog(apiKey, apiHost);
-  }, [apiHost, apiKey]);
+  }, [apiHost, apiKey, isInternalRoute]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || isInternalRoute) return;
     capturePosthogPageview(window.location.href);
-  }, [pathname]);
+  }, [isInternalRoute, pathname]);
 
   return children;
 }
