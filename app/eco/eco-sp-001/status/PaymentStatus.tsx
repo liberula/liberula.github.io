@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   FiAlertCircle,
@@ -97,6 +97,7 @@ export default function PaymentStatusView() {
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const capturedStatusEventsRef = useRef(new Set<string>());
 
   useEffect(() => {
     if (!orderReference) {
@@ -139,6 +140,20 @@ export default function PaymentStatusView() {
           case_id: "eco-sp-001",
           status: nextStatus,
         });
+        const funnelEvent = nextStatus === "paid"
+          ? "eco_payment_confirmed_viewed"
+          : nextStatus === "pending"
+          ? "eco_payment_pending_viewed"
+          : null;
+        if (
+          funnelEvent &&
+          !capturedStatusEventsRef.current.has(funnelEvent)
+        ) {
+          capturedStatusEventsRef.current.add(funnelEvent);
+          safePosthogCapture(funnelEvent, {
+            case_id: "eco-sp-001",
+          });
+        }
 
         if (
           nextStatus === "pending" &&

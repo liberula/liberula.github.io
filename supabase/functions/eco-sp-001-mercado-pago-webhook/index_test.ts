@@ -16,10 +16,12 @@ const TIMESTAMP = "1753800000";
 const FIXED_SIGNATURE =
   "ts=1753800000,v1=136fa5c0aabcdf852b0925beb382acb2446a5bb906605c52ff1afd8279244d69";
 const EXTERNAL_REFERENCE = `eco_${"a".repeat(32)}`;
+const COLLECTOR_ID = "3575880016";
 
 const config: WebhookConfig = {
   webhookSecret: SECRET,
-  mercadoPagoAccessToken: "TEST-synthetic-access-token",
+  mercadoPagoAccessToken: "APP_USR-synthetic-test-access-token",
+  expectedCollectorId: COLLECTOR_ID,
   supabaseUrl: "https://synthetic-project.supabase.co",
   supabaseServiceRoleKey: "synthetic-service-role",
 };
@@ -44,6 +46,7 @@ function payment(
   return {
     id: PAYMENT_ID,
     liveMode: false,
+    collectorId: COLLECTOR_ID,
     externalReference: EXTERNAL_REFERENCE,
     currency: "BRL",
     amount: 79.90,
@@ -279,11 +282,11 @@ Deno.test("signature failures happen before provider and database access", async
   }
 });
 
-Deno.test("missing or live configuration fails closed without details", async () => {
+Deno.test("missing or invalid environment configuration fails closed without details", async () => {
   for (
     const incomplete of [
       { ...config, webhookSecret: undefined },
-      { ...config, mercadoPagoAccessToken: "APP_USR-live" },
+      { ...config, expectedCollectorId: undefined },
       { ...config, supabaseServiceRoleKey: undefined },
     ]
   ) {
@@ -327,17 +330,19 @@ Deno.test("unknown provider payment and unknown order are rejected", async () =>
   const provider = new MemoryProvider();
   provider.value = null;
   const unknownPayment = await run({ provider }).handler(webhookRequest());
-  assert(unknownPayment.status === 404, "unknown payment should be rejected");
+  assert(
+    unknownPayment.status === 200,
+    "unknown payment should be acknowledged",
+  );
 
   const repository = new MemoryRepository();
   repository.order = null;
   const unknownOrder = await run({ repository }).handler(webhookRequest());
-  assert(unknownOrder.status === 404, "unknown order should be rejected");
+  assert(unknownOrder.status === 200, "unknown order should be acknowledged");
 });
 
 const paymentMismatchCases: Array<[string, Partial<AuthoritativePayment>]> = [
   ["signed resource", { id: "999" }],
-  ["live mode", { liveMode: true }],
   ["external reference", { externalReference: "invalid" }],
   ["currency", { currency: "USD" }],
   ["amount", { amount: 79.91 }],
@@ -352,7 +357,12 @@ for (const [name, patch] of paymentMismatchCases) {
     provider.value = payment(patch);
     const { handler, repository } = run({ provider });
     const response = await handler(webhookRequest());
-    assert(response.status === 400, `${name} should be rejected`);
+    assert(response.status === 200, `${name} should be acknowledged`);
+    assertEquals(
+      await response.json(),
+      { processed: false, result: "notification_rejected" },
+      `${name} exposed an unstable rejection response`,
+    );
     assert(repository.processCalls === 0, "mismatch reached mutation RPC");
   });
 }
@@ -371,7 +381,7 @@ for (const [name, patch] of orderMismatchCases) {
     repository.order = { ...repository.order!, ...patch };
     const response = await run({ repository }).handler(webhookRequest());
     assert(
-      [404, 409].includes(response.status),
+      response.status === 200,
       `${name} should be rejected`,
     );
     assert(
@@ -497,6 +507,56 @@ Deno.test("authoritative newer refund moves paid to refunded", async () => {
   );
 });
 
+Deno.test("all notification and payment live_mode combinations are diagnostic only", async () => {
+  for (
+    const [notificationMode, authoritativeMode] of [
+      [false, false],
+      [false, true],
+      [true, false],
+      [true, true],
+    ] as const
+  ) {
+    const provider = new MemoryProvider();
+    provider.value = payment({ liveMode: authoritativeMode });
+    const context = run({ provider });
+    const response = await context.handler(webhookRequest({
+      body: {
+        live_mode: notificationMode,
+        type: "payment",
+        data: { id: PAYMENT_ID },
+      },
+    }));
+    assert(response.status === 200, "authoritative validation should decide");
+    assert(
+      context.repository.orderStatus === "paid",
+      "live_mode prevented approved payment processing",
+    );
+    const serialized = JSON.stringify(context.logs);
+    assert(
+      serialized.includes(`"notificationLiveMode":${notificationMode}`),
+      "notification live mode missing from safe diagnostics",
+    );
+    assert(
+      serialized.includes(`"paymentLiveMode":${authoritativeMode}`),
+      "payment live mode missing from safe diagnostics",
+    );
+  }
+});
+
+Deno.test("collector mismatch is permanent and never mutates the order", async () => {
+  const collectorProvider = new MemoryProvider();
+  collectorProvider.value = payment({ collectorId: "999" });
+  const collector = run({ provider: collectorProvider });
+  assert(
+    (await collector.handler(webhookRequest())).status === 200,
+    "collector mismatch must not be retryable",
+  );
+  assert(
+    collector.repository.processCalls === 0,
+    "collector mismatch mutated order",
+  );
+});
+
 Deno.test("a protected newer observation also blocks an older refund", async () => {
   const context = run();
   await deliver(context, "approved", "2026-07-29T12:00:00.000Z");
@@ -548,7 +608,7 @@ Deno.test("provider, Supabase read, and RPC failures return retryable errors", a
   );
 });
 
-Deno.test("transactional RPC rejection is not acknowledged", async () => {
+Deno.test("permanent transactional RPC rejection is safely acknowledged", async () => {
   for (
     const result of [
       "unknown_order",
@@ -560,7 +620,7 @@ Deno.test("transactional RPC rejection is not acknowledged", async () => {
     const repository = new MemoryRepository();
     repository.forcedResult = result;
     const response = await run({ repository }).handler(webhookRequest());
-    assert(response.status >= 400, `${result} must not be acknowledged`);
+    assert(response.status === 200, `${result} should stop provider retries`);
   }
 });
 

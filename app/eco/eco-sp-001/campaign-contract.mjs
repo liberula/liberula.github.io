@@ -4,7 +4,8 @@ export {
 
 export const ECO_CAMPAIGN_ID = "eco-sp-001-founder";
 export const ECO_CAMPAIGN_TARGET = 100;
-export const ECO_CASE_URL = "https://liberula.com/eco/eco-sp-001/";
+export const ECO_CASE_URL = "https://liberula.com/eco";
+export const ECO_PURCHASE_PATH = "/eco/eco-sp-001/comprar";
 
 const CAMPAIGN_STATES = new Set(["collecting", "goal_reached", "closed"]);
 const REFERRAL_CODE_PATTERN = /^[A-F0-9]{12}$/;
@@ -64,6 +65,13 @@ export function buildReferralUrl(referralCode) {
   const url = new URL(ECO_CASE_URL);
   url.searchParams.set("ref", code);
   return url.toString();
+}
+
+export function buildPurchasePath(referralCode) {
+  const code = normalizeReferralCode(referralCode);
+  if (!code) return ECO_PURCHASE_PATH;
+  const params = new URLSearchParams({ ref: code });
+  return `${ECO_PURCHASE_PATH}?${params.toString()}`;
 }
 
 export function buildShareMessage(variant, url) {

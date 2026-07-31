@@ -8,6 +8,7 @@ type JsonObject = Record<string, unknown>;
 export type WebhookConfig = {
   webhookSecret?: string;
   mercadoPagoAccessToken?: string;
+  expectedCollectorId?: string;
   supabaseUrl?: string;
   supabaseServiceRoleKey?: string;
 };
@@ -15,6 +16,7 @@ export type WebhookConfig = {
 export type AuthoritativePayment = {
   id: string;
   liveMode: boolean;
+  collectorId: string;
   externalReference: string;
   currency: string;
   amount: number;
@@ -74,6 +76,10 @@ export type WebhookDependencies = {
       outcome: string;
       durationMs: number;
       correlationId?: string;
+      stage?: string;
+      reason?: string;
+      notificationLiveMode?: boolean;
+      paymentLiveMode?: boolean;
     }) => void;
   };
 };
@@ -249,10 +255,17 @@ function completeConfig(config: WebhookConfig): boolean {
   return Boolean(
     config.webhookSecret &&
       config.mercadoPagoAccessToken &&
-      /^TEST-/u.test(config.mercadoPagoAccessToken) &&
+      config.expectedCollectorId &&
+      /^[0-9]{1,30}$/u.test(config.expectedCollectorId) &&
       config.supabaseUrl &&
       config.supabaseServiceRoleKey,
   );
+}
+
+function notificationLiveMode(value: unknown): boolean | undefined {
+  return isPlainObject(value) && typeof value.live_mode === "boolean"
+    ? value.live_mode
+    : undefined;
 }
 
 function validBody(value: unknown, signedPaymentId: string): boolean {
@@ -269,23 +282,40 @@ function log(
   startedAt: number,
   outcome: string,
   correlationId?: string,
+  details: {
+    stage?: string;
+    reason?: string;
+    notificationLiveMode?: boolean;
+    paymentLiveMode?: boolean;
+  } = {},
 ): void {
   dependencies.logger?.info({
     eventType: "payment",
     outcome,
     durationMs: Math.max(0, (dependencies.now?.() ?? Date.now()) - startedAt),
     ...(correlationId ? { correlationId } : {}),
+    ...details,
   });
+}
+
+function rejected(): Response {
+  // Permanent validation failures are acknowledged so Mercado Pago does not
+  // retry an event that can never become valid for this campaign.
+  return json(200, { processed: false, result: "notification_rejected" });
 }
 
 export function createWebhookHandler(dependencies: WebhookDependencies) {
   return async (request: Request): Promise<Response> => {
     const startedAt = dependencies.now?.() ?? Date.now();
+    const correlationId = crypto.randomUUID();
     if (request.method !== "POST") {
       return json(405, { error: "method_not_allowed" });
     }
     if (!completeConfig(dependencies.config)) {
-      log(dependencies, startedAt, "service_unavailable");
+      log(dependencies, startedAt, "service_unavailable", correlationId, {
+        stage: "configuration",
+        reason: "missing_configuration",
+      });
       return json(503, { error: "service_unavailable" });
     }
 
@@ -301,11 +331,13 @@ export function createWebhookHandler(dependencies: WebhookDependencies) {
       signature,
     );
     if (!validSignature) {
-      log(dependencies, startedAt, "invalid_signature");
+      log(dependencies, startedAt, "invalid_signature", correlationId, {
+        stage: "signature_validation",
+        reason: "invalid_signature",
+      });
       return json(401, { error: "unauthorized" });
     }
 
-    const correlationId = (await sha256(requestId)).slice(0, 16);
     if (queryType !== null && queryType !== "payment") {
       log(dependencies, startedAt, "unsupported_topic", correlationId);
       return json(400, { error: "notification_rejected" });
@@ -324,33 +356,47 @@ export function createWebhookHandler(dependencies: WebhookDependencies) {
       log(dependencies, startedAt, "invalid_notification", correlationId);
       return json(400, { error: "notification_rejected" });
     }
+    const receivedLiveMode = notificationLiveMode(parsed.body);
 
     let payment: AuthoritativePayment | null;
     try {
       payment = await dependencies.provider.getPayment(paymentId);
     } catch {
-      log(dependencies, startedAt, "provider_unavailable", correlationId);
+      log(dependencies, startedAt, "provider_unavailable", correlationId, {
+        stage: "payment_fetch",
+        reason: "mercado_pago_failure",
+      });
       return json(503, { error: "service_unavailable" });
     }
     if (!payment) {
-      log(dependencies, startedAt, "unknown_payment", correlationId);
-      return json(404, { error: "notification_rejected" });
+      log(dependencies, startedAt, "unknown_payment", correlationId, {
+        stage: "payment_fetch",
+        reason: "payment_not_found",
+      });
+      return rejected();
     }
 
     const mappedStatus = STATUS_MAP[payment.status];
     const providerUpdatedAt = Date.parse(payment.updatedAt);
-    if (
-      payment.id !== paymentId ||
-      payment.liveMode !== false ||
-      !EXTERNAL_REFERENCE_PATTERN.test(payment.externalReference) ||
-      payment.currency !== "BRL" ||
-      !Number.isFinite(payment.amount) ||
-      payment.amount !== 79.90 ||
-      !mappedStatus ||
-      Number.isNaN(providerUpdatedAt)
-    ) {
-      log(dependencies, startedAt, "payment_mismatch", correlationId);
-      return json(400, { error: "notification_rejected" });
+    const paymentRejection = payment.id !== paymentId
+      ? "payment_not_found"
+      : !EXTERNAL_REFERENCE_PATTERN.test(payment.externalReference)
+      ? "external_reference_mismatch"
+      : payment.currency !== "BRL"
+      ? "currency_mismatch"
+      : !Number.isFinite(payment.amount) || payment.amount !== 79.90
+      ? "amount_mismatch"
+      : !mappedStatus || Number.isNaN(providerUpdatedAt)
+      ? "invalid_status"
+      : payment.collectorId !== dependencies.config.expectedCollectorId
+      ? "collector_mismatch"
+      : null;
+    if (paymentRejection) {
+      log(dependencies, startedAt, paymentRejection, correlationId, {
+        stage: "payment_validation",
+        reason: paymentRejection,
+      });
+      return rejected();
     }
 
     let order: StoredOrder | null;
@@ -359,12 +405,18 @@ export function createWebhookHandler(dependencies: WebhookDependencies) {
         payment.externalReference,
       );
     } catch {
-      log(dependencies, startedAt, "database_unavailable", correlationId);
+      log(dependencies, startedAt, "database_unavailable", correlationId, {
+        stage: "order_lookup",
+        reason: "database_failure",
+      });
       return json(503, { error: "service_unavailable" });
     }
     if (!order) {
-      log(dependencies, startedAt, "unknown_order", correlationId);
-      return json(404, { error: "notification_rejected" });
+      log(dependencies, startedAt, "unknown_order", correlationId, {
+        stage: "order_lookup",
+        reason: "order_not_found",
+      });
+      return rejected();
     }
     if (
       order.externalReference !== payment.externalReference ||
@@ -374,8 +426,11 @@ export function createWebhookHandler(dependencies: WebhookDependencies) {
       (order.providerPaymentId !== null &&
         order.providerPaymentId !== payment.id)
     ) {
-      log(dependencies, startedAt, "order_mismatch", correlationId);
-      return json(409, { error: "notification_rejected" });
+      log(dependencies, startedAt, "order_mismatch", correlationId, {
+        stage: "order_validation",
+        reason: "order_invariant_mismatch",
+      });
+      return rejected();
     }
 
     const observationKey = await sha256(
@@ -397,7 +452,10 @@ export function createWebhookHandler(dependencies: WebhookDependencies) {
         },
       });
     } catch {
-      log(dependencies, startedAt, "database_unavailable", correlationId);
+      log(dependencies, startedAt, "database_unavailable", correlationId, {
+        stage: "order_transition",
+        reason: "database_failure",
+      });
       return json(503, { error: "service_unavailable" });
     }
 
@@ -411,11 +469,16 @@ export function createWebhookHandler(dependencies: WebhookDependencies) {
       ].includes(result)
     ) {
       log(dependencies, startedAt, result, correlationId);
-      const status = result === "unknown_order" ? 404 : 409;
-      return json(status, { error: "notification_rejected" });
+      return rejected();
     }
 
-    log(dependencies, startedAt, result, correlationId);
+    log(dependencies, startedAt, result, correlationId, {
+      stage: "order_transition",
+      ...(receivedLiveMode === undefined
+        ? {}
+        : { notificationLiveMode: receivedLiveMode }),
+      paymentLiveMode: payment.liveMode,
+    });
     return json(200, { processed: true, result });
   };
 }
@@ -496,23 +559,28 @@ function createSupabaseRepository(
 }
 
 function createMercadoPagoProvider(accessToken?: string): PaymentProvider {
+  async function providerJson(path: string): Promise<JsonObject | null> {
+    if (!accessToken) throw new Error("invalid_provider_configuration");
+    const response = await fetch(`https://api.mercadopago.com${path}`, {
+      headers: { "Authorization": `Bearer ${accessToken}` },
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error("provider_request_failed");
+    const value = await response.json();
+    if (!isPlainObject(value)) throw new Error("invalid_provider_response");
+    return value;
+  }
+
   return {
     async getPayment(paymentId) {
-      if (!accessToken || !/^TEST-/u.test(accessToken)) {
-        throw new Error("invalid_provider_configuration");
-      }
-      const response = await fetch(
-        `https://api.mercadopago.com/v1/payments/${
-          encodeURIComponent(paymentId)
-        }`,
-        { headers: { "Authorization": `Bearer ${accessToken}` } },
+      const value = await providerJson(
+        `/v1/payments/${encodeURIComponent(paymentId)}`,
       );
-      if (response.status === 404) return null;
-      if (!response.ok) throw new Error("provider_request_failed");
-      const value = await response.json() as JsonObject;
+      if (!value) return null;
       return {
         id: String(value.id ?? ""),
-        liveMode: value.live_mode !== false,
+        liveMode: value.live_mode === true,
+        collectorId: String(value.collector_id ?? ""),
         externalReference: String(value.external_reference ?? ""),
         currency: String(value.currency_id ?? ""),
         amount: Number(value.transaction_amount),
@@ -527,6 +595,7 @@ if (import.meta.main) {
   const config: WebhookConfig = {
     webhookSecret: Deno.env.get("MERCADO_PAGO_WEBHOOK_SECRET"),
     mercadoPagoAccessToken: Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"),
+    expectedCollectorId: Deno.env.get("MERCADO_PAGO_COLLECTOR_ID"),
     supabaseUrl: Deno.env.get("SUPABASE_URL"),
     supabaseServiceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
   };

@@ -23,6 +23,11 @@ import {
   trackEcoFormStarted,
   trackEcoLandingView,
 } from "./tracking";
+import { safePosthogCapture } from "../analytics/posthog";
+import {
+  ECO_CAMPAIGN_ID,
+  normalizeReferralCode,
+} from "./eco-sp-001/campaign-contract.mjs";
 import styles from "./EcoLanding.module.css";
 
 type FormField = "name" | "email" | "consent";
@@ -58,6 +63,31 @@ export default function EcoLanding() {
   const [countdown, setCountdown] = useState<EcoCountdown | null>(null);
 
   useEffect(() => {
+    const referralCode = normalizeReferralCode(
+      new URLSearchParams(window.location.search).get("ref"),
+    );
+    if (referralCode) {
+      let referralEventCaptured = false;
+      try {
+        window.sessionStorage.setItem(
+          "eco-sp-001:referral-code",
+          referralCode,
+        );
+        const eventKey = "eco-sp-001:referral-captured-event";
+        referralEventCaptured = window.sessionStorage.getItem(eventKey) === "1";
+        window.sessionStorage.setItem(eventKey, "1");
+      } catch {
+        // The URL remains available for the current landing-page visit.
+      }
+      if (!referralEventCaptured) {
+        safePosthogCapture("eco_referral_code_captured", {
+          case_id: "eco-sp-001",
+          campaign_id: ECO_CAMPAIGN_ID,
+          has_referral: true,
+        });
+      }
+    }
+
     const attribution = readEcoAttribution();
     trackEcoLandingView(attribution);
 

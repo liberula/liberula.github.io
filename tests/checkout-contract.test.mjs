@@ -74,6 +74,18 @@ test("accepts the Brazilian sandbox hostname", () => {
   );
 });
 
+test("accepts a backend-selected production Checkout Pro URL", () => {
+  assert.ok(
+    parseOrderResponse({
+      checkoutUrl:
+        "https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=live",
+      orderReference: "opaque-order-reference",
+      referralCode: "AB7C09DE12FF",
+      referralAttributed: false,
+    }),
+  );
+});
+
 for (const [name, value] of [
   ["non-object response", null],
   [

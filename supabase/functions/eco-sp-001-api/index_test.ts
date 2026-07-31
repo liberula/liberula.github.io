@@ -2,6 +2,7 @@ import {
   type Buyer,
   type CampaignProgress,
   createEcoApiHandler,
+  createMercadoPagoAdapter,
   ECO_PRODUCT,
   type EcoApiConfig,
   type MercadoPagoAdapter,
@@ -38,6 +39,7 @@ const completeConfig: EcoApiConfig = {
   supabaseUrl: "https://synthetic-project.supabase.co",
   supabaseServiceRoleKey: "synthetic-service-role",
   mercadoPagoAccessToken: "TEST-synthetic-access-token",
+  mercadoPagoEnvironment: "test",
   statusRateLimitSalt: "synthetic-rate-limit-salt-32bytes",
 };
 
@@ -236,7 +238,8 @@ function dependencies(overrides: {
       mercadoPago: provider,
       sleep: () => Promise.resolve(),
       logger: {
-        error: (message) => logs.push(message),
+        error: (entry) =>
+          logs.push(typeof entry === "string" ? entry : JSON.stringify(entry)),
         info: (entry) => logs.push(JSON.stringify(entry)),
       },
     }),
@@ -608,7 +611,7 @@ Deno.test("provider idempotency key and URLs remain stable across recoverable re
     "provider idempotency key changed",
   );
   const expectedReturn =
-    `https://liberula.com/eco/eco-sp-001/status?order=${ORDER_REFERENCE}`;
+    `https://liberula.com/eco/eco-sp-001/comprar?order=${ORDER_REFERENCE}`;
   assertEquals(provider.calls[1].backUrls, {
     success: expectedReturn,
     pending: expectedReturn,
@@ -631,20 +634,202 @@ Deno.test("production checkout response is rejected and claim released", async (
   assert(orders.releaseCalls === 1, "claim should be recoverable");
 });
 
-Deno.test("live credential and missing database configuration return generic 503", async () => {
+Deno.test("production configuration accepts only the provider production URL", async () => {
+  const provider = new CapturingProvider();
+  provider.response.checkoutUrl =
+    "https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=live";
+  const { handler, orders } = dependencies({
+    provider,
+    config: { ...completeConfig, mercadoPagoEnvironment: "production" },
+  });
+  const response = await handler(orderRequest());
+  assert(response.status === 201, "production checkout should be returned");
+  assert(orders.releaseCalls === 0, "valid preference claim was released");
+});
+
+Deno.test("APP_USR sandbox credentials reach checkout while missing configuration fails safely", async () => {
+  const accepted = dependencies({
+    config: {
+      ...completeConfig,
+      mercadoPagoAccessToken: "APP_USR-synthetic-sandbox-token",
+    },
+  });
+  assert(
+    (await accepted.handler(orderRequest())).status === 201,
+    "APP_USR credential was rejected before the provider",
+  );
+  assert(accepted.provider.calls.length === 1, "provider was not called");
+
+  const logs: string[] = [];
+  const response = await dependencies({
+    config: { ...completeConfig, supabaseServiceRoleKey: undefined },
+    logs,
+  }).handler(orderRequest());
+  assert(response.status === 503, "missing configuration should fail");
+  assertEquals(
+    await response.json(),
+    { error: "service_unavailable" },
+    "configuration leaked",
+  );
+  assert(
+    logs.join(" ").includes("SUPABASE_SERVICE_ROLE_KEY"),
+    "missing key name was not diagnosed",
+  );
+  assert(
+    !logs.join(" ").includes(completeConfig.mercadoPagoAccessToken!),
+    "configured token leaked",
+  );
+
+  const missingEnvironment = await dependencies({
+    config: { ...completeConfig, mercadoPagoEnvironment: undefined },
+  }).handler(orderRequest());
+  assert(
+    missingEnvironment.status === 503,
+    "missing checkout environment should fail closed",
+  );
+});
+
+Deno.test("Mercado Pago adapter accepts a sandbox preference response", async () => {
+  const adapter = createMercadoPagoAdapter(
+    "APP_USR-synthetic-sandbox-token",
+    async () =>
+      new Response(
+        JSON.stringify({
+          id: "synthetic-preference-id",
+          sandbox_init_point: CHECKOUT_URL,
+          live_mode: false,
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      ),
+  );
+  const created = await adapter.createPreference({
+    item: {
+      title: ECO_PRODUCT.title,
+      quantity: 1,
+      currencyId: "BRL",
+      unitPrice: 79.90,
+    },
+    buyer: validBuyer,
+    externalReference: "synthetic-external-reference",
+    providerIdempotencyKey: IDEMPOTENCY_KEY,
+    backUrls: {
+      success: `${ORIGIN}/success`,
+      pending: `${ORIGIN}/pending`,
+      failure: `${ORIGIN}/failure`,
+    },
+    notificationUrl:
+      "https://synthetic-project.supabase.co/functions/v1/webhook",
+    autoReturn: "approved",
+  });
+  assertEquals(
+    created,
+    {
+      preferenceId: "synthetic-preference-id",
+      checkoutUrl: CHECKOUT_URL,
+    },
+    "sandbox provider response changed",
+  );
+});
+
+Deno.test("Mercado Pago adapter selects init_point only in production mode", async () => {
+  const productionUrl =
+    "https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=live";
+  const adapter = createMercadoPagoAdapter(
+    "APP_USR-synthetic-production-token",
+    async () =>
+      new Response(
+        JSON.stringify({
+          id: "synthetic-production-preference",
+          init_point: productionUrl,
+          sandbox_init_point: CHECKOUT_URL,
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      ),
+    "production",
+  );
+  const created = await adapter.createPreference({
+    item: {
+      title: ECO_PRODUCT.title,
+      quantity: 1,
+      currencyId: "BRL",
+      unitPrice: 79.90,
+    },
+    buyer: validBuyer,
+    externalReference: "synthetic-external-reference",
+    providerIdempotencyKey: IDEMPOTENCY_KEY,
+    backUrls: {
+      success: `${ORIGIN}/success`,
+      pending: `${ORIGIN}/pending`,
+      failure: `${ORIGIN}/failure`,
+    },
+    notificationUrl:
+      "https://synthetic-project.supabase.co/functions/v1/webhook",
+    autoReturn: "approved",
+  });
+  assertEquals(created.checkoutUrl, productionUrl, "wrong production URL");
+});
+
+Deno.test("Mercado Pago failures and invalid JSON produce safe diagnostics", async () => {
   for (
-    const config of [
-      { ...completeConfig, mercadoPagoAccessToken: "APP_USR-live-like" },
-      { ...completeConfig, supabaseServiceRoleKey: undefined },
-    ]
+    const [response, expectedCode] of [
+      [
+        new Response(
+          JSON.stringify({
+            error: "invalid_preference",
+            message:
+              `Rejected ${validBuyer.name} ${validBuyer.email} ${validBuyer.whatsapp} ${validBuyer.address.street}`,
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        ),
+        "invalid_preference",
+      ],
+      [
+        new Response("<not-json>", {
+          status: 502,
+          headers: { "Content-Type": "text/plain" },
+        }),
+        "provider_invalid_json",
+      ],
+    ] as const
   ) {
-    const response = await dependencies({ config }).handler(orderRequest());
-    assert(response.status === 503, "configuration should fail");
+    const logs: string[] = [];
+    const token = "APP_USR-sensitive-synthetic-token";
+    const handler = createEcoApiHandler({
+      config: { ...completeConfig, mercadoPagoAccessToken: token },
+      orders: new MemoryOrders(),
+      mercadoPago: createMercadoPagoAdapter(
+        token,
+        async () => response.clone(),
+      ),
+      sleep: () => Promise.resolve(),
+      logger: {
+        error: (entry) =>
+          logs.push(typeof entry === "string" ? entry : JSON.stringify(entry)),
+        info: (entry) => logs.push(JSON.stringify(entry)),
+      },
+    });
+    const result = await handler(orderRequest(validBuyer));
+    assert(result.status === 502, "provider failure should be 502");
     assertEquals(
-      await response.json(),
-      { error: "service_unavailable" },
-      "configuration leaked",
+      await result.json(),
+      { error: "checkout_unavailable" },
+      "provider detail leaked publicly",
     );
+    const observable = logs.join(" ");
+    assert(observable.includes(expectedCode), "safe provider code missing");
+    assert(observable.includes("mercado_pago_preference"), "stage missing");
+    for (
+      const secret of [
+        token,
+        validBuyer.name,
+        validBuyer.email,
+        validBuyer.whatsapp,
+        validBuyer.address.street,
+        completeConfig.supabaseServiceRoleKey!,
+      ]
+    ) {
+      assert(!observable.includes(secret), `diagnostic leaked: ${secret}`);
+    }
   }
 });
 

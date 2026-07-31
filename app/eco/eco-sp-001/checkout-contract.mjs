@@ -4,6 +4,14 @@ const SANDBOX_CHECKOUT_HOSTS = new Set([
   "sandbox.mercadopago.com",
   "sandbox.mercadopago.com.br",
 ]);
+const PRODUCTION_CHECKOUT_HOSTS = new Set([
+  "www.mercadopago.com",
+  "www.mercadopago.com.br",
+]);
+const TRUSTED_CHECKOUT_HOSTS = new Set([
+  ...SANDBOX_CHECKOUT_HOSTS,
+  ...PRODUCTION_CHECKOUT_HOSTS,
+]);
 
 function isPlainObject(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -45,7 +53,7 @@ export function parseOrderResponse(value) {
     const checkoutUrl = new URL(value.checkoutUrl);
     if (
       checkoutUrl.protocol !== "https:" ||
-      !SANDBOX_CHECKOUT_HOSTS.has(checkoutUrl.hostname)
+      !TRUSTED_CHECKOUT_HOSTS.has(checkoutUrl.hostname)
     ) {
       return null;
     }

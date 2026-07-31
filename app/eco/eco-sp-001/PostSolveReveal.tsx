@@ -1,15 +1,19 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { FiArrowRight, FiCheck } from "react-icons/fi";
 import { safePosthogCapture } from "../../analytics/posthog";
-import BuyerForm from "./BuyerForm";
 import {
   buildCampaignProgressEndpoint,
+  buildPurchasePath,
   ECO_CAMPAIGN_ID,
   parseCampaignProgress,
 } from "./campaign-contract.mjs";
+import FounderProgress, {
+  type CampaignProgress,
+} from "./FounderProgress";
 import ShareControls from "./ShareControls";
 import {
   getRevealDelay,
@@ -91,30 +95,18 @@ function useViewedEvent<T extends HTMLElement>(
   return elementRef;
 }
 
-type CampaignProgress = {
-  campaignId: string;
-  confirmed: number;
-  target: number;
-  goalReached: boolean;
-  status: "collecting" | "goal_reached" | "closed";
-  closesAt: string;
-  displayPercent: number;
-};
-
 export default function PostSolveReveal({
   referralCode,
 }: {
   referralCode: string | null;
 }) {
   const [step, setStep] = useState(0);
-  const [buyerFormVisible, setBuyerFormVisible] = useState(false);
   const [campaignPhase, setCampaignPhase] = useState<
     "loading" | "ready" | "failure"
   >("loading");
   const [campaign, setCampaign] = useState<CampaignProgress | null>(null);
   const reducedMotion = usePrefersReducedMotion();
   const confirmationHeadingRef = useRef<HTMLHeadingElement>(null);
-  const buyerFormHeadingRef = useRef<HTMLHeadingElement>(null);
   const agentReportRef = useViewedEvent<HTMLElement>(
     "eco_case_agent_report_viewed",
     isStageVisible(step, REVEAL_STAGES.report),
@@ -122,10 +114,6 @@ export default function PostSolveReveal({
   const whiteRoomRef = useViewedEvent<HTMLElement>(
     "eco_case_white_room_viewed",
     isStageVisible(step, REVEAL_STAGES.evidence),
-  );
-  const conclusionRef = useViewedEvent<HTMLElement>(
-    "eco_case_conclusion_viewed",
-    isStageVisible(step, REVEAL_STAGES.conclusion),
   );
   const offerRef = useViewedEvent<HTMLElement>(
     "eco_case_offer_viewed",
@@ -145,10 +133,6 @@ export default function PostSolveReveal({
     );
     return () => window.clearTimeout(timeout);
   }, [reducedMotion, step]);
-
-  useEffect(() => {
-    if (buyerFormVisible) buyerFormHeadingRef.current?.focus();
-  }, [buyerFormVisible]);
 
   useEffect(() => {
     if (!isStageVisible(step, REVEAL_STAGES.offer)) return;
@@ -284,27 +268,64 @@ export default function PostSolveReveal({
             aria-label="Transcrição parcial do áudio de Agente Quina"
           >
             <p>
-              <span>AGENTE QUINA</span>
-              Estou no escritório de Jonas Valença. A porta não está levando ao
-              corredor esperado.
+              <time className={styles.transcriptTime} dateTime="PT3S">
+                [00:03]
+              </time>
+              <span className={styles.transcriptSpeaker}>AGENTE QUINA</span>
+              Estou no escritório de Jonas Valença.
             </p>
             <p>
-              <span>AGENTE QUINA</span>O ambiente do outro lado não corresponde
-              a nenhuma parte da planta do imóvel. Pela profundidade aparente,
-              este espaço não poderia existir dentro do edifício.
+              <time className={styles.transcriptTime} dateTime="PT8S">
+                [00:08]
+              </time>
+              <span className={styles.transcriptSpeaker}>AGENTE QUINA</span>A
+              porta não está levando ao corredor esperado.
             </p>
             <p>
-              <span>AGENTE QUINA</span>A iluminação disponível não alcança o
-              final. O ambiente continua além do campo iluminado.
+              <time className={styles.transcriptTime} dateTime="PT14S">
+                [00:14]
+              </time>
+              <span className={styles.transcriptSpeaker}>AGENTE QUINA</span>O
+              ambiente do outro lado não corresponde a nenhuma parte da planta
+              do imóvel.
             </p>
             <p>
-              <span>AGENTE QUINA</span>
+              <time className={styles.transcriptTime} dateTime="PT22S">
+                [00:22]
+              </time>
+              <span className={styles.transcriptSpeaker}>AGENTE QUINA</span>Pela
+              profundidade aparente, este espaço não poderia existir dentro do
+              edifício.
+            </p>
+            <p>
+              <time className={styles.transcriptTime} dateTime="PT30S">
+                [00:30]
+              </time>
+              <span className={styles.transcriptSpeaker}>AGENTE QUINA</span>A
+              iluminação disponível não alcança o final. O ambiente continua
+              além do campo iluminado.
+            </p>
+            <p>
+              <time className={styles.transcriptTime} dateTime="PT37S">
+                [00:37]
+              </time>
+              <span className={styles.transcriptSpeaker}>AGENTE QUINA</span>
               Vou deixar a sonda de referência na sala branca, deste lado da
-              passagem. Ela deve permanecer como referência física no lado do
-              apartamento e continuar transmitindo se a passagem se fechar.
+              passagem.
             </p>
             <p>
-              <span>AGENTE QUINA</span>
+              <time className={styles.transcriptTime} dateTime="PT44S">
+                [00:44]
+              </time>
+              <span className={styles.transcriptSpeaker}>AGENTE QUINA</span>Ela
+              deve permanecer como referência física no lado do apartamento e
+              continuar transmitindo se a passagem se fechar.
+            </p>
+            <p>
+              <time className={styles.transcriptTime} dateTime="PT53S">
+                [00:53]
+              </time>
+              <span className={styles.transcriptSpeaker}>AGENTE QUINA</span>
               Vou entrar na anomalia para uma inspeção direta. Iniciando
               travessia.
             </p>
@@ -370,19 +391,6 @@ export default function PostSolveReveal({
         </section>
       )}
 
-      {isStageVisible(step, REVEAL_STAGES.conclusion) && (
-        <section
-          ref={conclusionRef}
-          className={`${styles.revealSection} ${styles.caseConclusion}`}
-          aria-labelledby="eco-conclusion-title"
-        >
-          <p className={styles.protocol}>CONCLUSÃO DO CASO PÚBLICO</p>
-          <h2 id="eco-conclusion-title">Investigação concluída</h2>
-          <p>O imóvel permanece sob observação.</p>
-          <strong>A ocorrência continua ativa e não foi encerrada.</strong>
-        </section>
-      )}
-
       {isStageVisible(step, REVEAL_STAGES.offer) && (
         <section
           ref={offerRef}
@@ -445,19 +453,21 @@ export default function PostSolveReveal({
             </div>
           ) : (
             <>
-              {!buyerFormVisible && (
-                <button
-                  className={styles.offerCta}
-                  type="button"
-                  onClick={() => {
-                    captureStageOnce("eco_case_offer_cta_clicked");
-                    setBuyerFormVisible(true);
-                  }}
-                >
-                  QUERO PARTICIPAR DO LOTE FUNDADOR
+              <Link
+                className={styles.offerCta}
+                href={buildPurchasePath(referralCode)}
+                onClick={() => {
+                  captureStageOnce("eco_case_offer_cta_clicked");
+                  safePosthogCapture("eco_purchase_cta_clicked", {
+                    case_id: "eco-sp-001",
+                    campaign_state: campaign?.status ?? "unknown",
+                    has_referral: Boolean(referralCode),
+                  });
+                }}
+              >
+                  PARTICIPAR DO LOTE FUNDADOR
                   <FiArrowRight aria-hidden="true" />
-                </button>
-              )}
+              </Link>
 
               <ShareControls
                 variant={
@@ -469,83 +479,10 @@ export default function PostSolveReveal({
                 }
                 campaignState={campaign?.status ?? null}
               />
-
-              {buyerFormVisible && (
-                <div className={styles.buyerFormReveal}>
-                  <BuyerForm
-                    headingRef={buyerFormHeadingRef}
-                    referralCode={referralCode}
-                  />
-                </div>
-              )}
             </>
           )}
         </section>
       )}
     </section>
-  );
-}
-
-function FounderProgress({
-  phase,
-  campaign,
-}: {
-  phase: "loading" | "ready" | "failure";
-  campaign: CampaignProgress | null;
-}) {
-  if (phase !== "ready" || !campaign) {
-    return (
-      <div className={styles.progressFallback}>
-        <p>A campanha está em andamento.</p>
-        {phase === "loading" && (
-          <span className={styles.progressSkeleton} aria-hidden="true" />
-        )}
-      </div>
-    );
-  }
-
-  if (campaign.status === "closed") {
-    return null;
-  }
-
-  if (campaign.goalReached) {
-    return (
-      <div className={styles.founderProgress}>
-        <strong>META DE PRODUÇÃO ATINGIDA</strong>
-        <div
-          className={styles.progressBar}
-          role="img"
-          aria-label="Meta de produção atingida"
-        >
-          <span style={{ width: "100%" }} />
-        </div>
-        <p>O lote fundador está confirmado.</p>
-        <p>
-          Novos investigadores ainda podem participar enquanto as inscrições
-          estiverem abertas.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className={styles.founderProgress}>
-      <strong>
-        {campaign.confirmed} de {campaign.target} dossiês confirmados
-      </strong>
-      <div
-        className={styles.progressBar}
-        role="progressbar"
-        aria-label={`${campaign.confirmed} de ${campaign.target} dossiês confirmados`}
-        aria-valuemin={0}
-        aria-valuemax={campaign.target}
-        aria-valuenow={campaign.confirmed}
-      >
-        <span style={{ width: `${campaign.displayPercent}%` }} />
-      </div>
-      <p>
-        A produção será confirmada quando o lote atingir 100 investigadores.
-      </p>
-    </div>
   );
 }

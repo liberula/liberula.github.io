@@ -1,11 +1,23 @@
 "use client";
 
-import { FormEvent, useState, type RefObject } from "react";
-import { FiArrowRight, FiMapPin, FiShield } from "react-icons/fi";
+import { FormEvent, useRef, useState, type RefObject } from "react";
+import {
+  FiArrowRight,
+  FiLoader,
+  FiMapPin,
+  FiRefreshCw,
+  FiShield,
+} from "react-icons/fi";
 import { safePosthogCapture } from "../../analytics/posthog";
 import { validateBuyerInput } from "./buyer-validation.mjs";
-import CheckoutContinuation from "./CheckoutContinuation";
+import {
+  buildOrderEndpoint,
+  createOrderRequest,
+  parseOrderResponse,
+} from "./checkout-contract.mjs";
 import styles from "./EcoCase.module.css";
+
+const ECO_API_BASE_URL = process.env.NEXT_PUBLIC_ECO_API_BASE_URL;
 
 export type BuyerPayload = {
   name: string;
@@ -136,12 +148,26 @@ export default function BuyerForm({
   referralCode?: string | null;
 } = {}) {
   const [errors, setErrors] = useState<BuyerErrors>({});
-  const [preparedPayload, setPreparedPayload] = useState<BuyerPayload | null>(
-    null,
-  );
+  const [checkoutState, setCheckoutState] = useState<
+    "ready" | "submitting" | "failure"
+  >("ready");
+  const idempotencyKeyRef = useRef<string | null>(null);
+  const submittingRef = useRef(false);
+  const startedRef = useRef(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function trackStarted() {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    safePosthogCapture("eco_purchase_form_started", {
+      case_id: "eco-sp-001",
+      has_referral: Boolean(referralCode),
+    });
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submittingRef.current) return;
+
     const form = event.currentTarget;
     const result = validateBuyerInput(inputFromForm(new FormData(form)));
     const nextErrors = result.errors as BuyerErrors;
@@ -163,28 +189,72 @@ export default function BuyerForm({
       return;
     }
 
-    setPreparedPayload(result.payload as BuyerPayload);
-    safePosthogCapture("eco_founder_form_prepared", {
+    submittingRef.current = true;
+    setCheckoutState("submitting");
+    safePosthogCapture("eco_purchase_form_submitted", {
       case_id: "eco-sp-001",
+      has_referral: Boolean(referralCode),
     });
-  }
 
-  if (preparedPayload) {
-    return (
-      <CheckoutContinuation
-        buyer={preparedPayload}
-        referralCode={referralCode ?? null}
-      />
-    );
+    try {
+      const idempotencyKey =
+        idempotencyKeyRef.current ?? globalThis.crypto.randomUUID();
+      idempotencyKeyRef.current = idempotencyKey;
+      const orderEndpoint = buildOrderEndpoint(ECO_API_BASE_URL);
+      if (!orderEndpoint) throw new Error("checkout_not_configured");
+
+      const response = await fetch(orderEndpoint, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify(
+          createOrderRequest(result.payload, referralCode ?? null),
+        ),
+      });
+      const body: unknown = await response.json().catch(() => null);
+      const order = response.ok ? parseOrderResponse(body) : null;
+      if (!order) throw new Error("checkout_unavailable");
+
+      if (order.referralAttributed) {
+        safePosthogCapture("eco_referral_order_created", {
+          case_id: "eco-sp-001",
+          campaign_id: "eco-sp-001-founder",
+          has_referral: true,
+        });
+      }
+      safePosthogCapture("eco_checkout_redirect_started", {
+        case_id: "eco-sp-001",
+        has_referral: Boolean(referralCode),
+      });
+      window.location.assign(order.checkoutUrl);
+    } catch {
+      setCheckoutState("failure");
+      safePosthogCapture("eco_checkout_error", {
+        case_id: "eco-sp-001",
+      });
+    } finally {
+      submittingRef.current = false;
+    }
   }
 
   return (
-    <form className={styles.buyerForm} onSubmit={handleSubmit} noValidate>
+    <form
+      className={styles.buyerForm}
+      onSubmit={handleSubmit}
+      onFocusCapture={trackStarted}
+      noValidate
+    >
       <div className={styles.formSectionHeading}>
-        <h3 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
+        <h2 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
           Dados do comprador
-        </h3>
-        <p>Preencha os dados necessários para preparar a futura continuação.</p>
+        </h2>
+        <p>
+          Informe seus dados de contato e entrega. Ao enviar, você seguirá
+          diretamente para o ambiente seguro do Mercado Pago.
+        </p>
       </div>
 
       <div className={styles.buyerGrid}>
@@ -193,14 +263,17 @@ export default function BuyerForm({
             key={field.name}
             field={field}
             error={errors[field.name]}
+            disabled={checkoutState === "submitting"}
             clearError={() =>
-              setErrors((current) => ({ ...current, [field.name]: undefined }))
-            }
+              setErrors((current) => ({ ...current, [field.name]: undefined }))}
           />
         ))}
       </div>
 
-      <fieldset className={styles.addressFields}>
+      <fieldset
+        className={styles.addressFields}
+        disabled={checkoutState === "submitting"}
+      >
         <legend>
           <FiMapPin aria-hidden="true" /> Endereço de entrega
         </legend>
@@ -210,25 +283,50 @@ export default function BuyerForm({
               key={field.name}
               field={field}
               error={errors[field.name]}
+              disabled={checkoutState === "submitting"}
               clearError={() =>
                 setErrors((current) => ({
                   ...current,
                   [field.name]: undefined,
-                }))
-              }
+                }))}
             />
           ))}
         </div>
       </fieldset>
 
       <p className={styles.dataNote}>
-        <FiShield aria-hidden="true" /> Os dados permanecem apenas neste
-        formulário nesta etapa e não são enviados ou armazenados.
+        <FiShield aria-hidden="true" /> Seus dados serão enviados somente ao
+        servidor da E.C.O. para criar o pedido e preparar o pagamento.
       </p>
 
-      <button className={styles.submitButton} type="submit">
-        PREPARAR CONTINUAÇÃO <FiArrowRight aria-hidden="true" />
+      <button
+        className={styles.submitButton}
+        type="submit"
+        disabled={checkoutState === "submitting"}
+      >
+        {checkoutState === "submitting" ? (
+          <>
+            <FiLoader className={styles.spinner} aria-hidden="true" />
+            PREPARANDO PAGAMENTO...
+          </>
+        ) : checkoutState === "failure" ? (
+          <>
+            TENTAR NOVAMENTE <FiRefreshCw aria-hidden="true" />
+          </>
+        ) : (
+          <>
+            CONTINUAR NO MERCADO PAGO <FiArrowRight aria-hidden="true" />
+          </>
+        )}
       </button>
+      <div className={styles.checkoutFeedback} role="alert" aria-live="polite">
+        {checkoutState === "failure" && (
+          <p>
+            Não foi possível preparar o pagamento. Seus dados foram preservados;
+            tente novamente.
+          </p>
+        )}
+      </div>
     </form>
   );
 }
@@ -236,10 +334,12 @@ export default function BuyerForm({
 function BuyerFieldInput({
   field,
   error,
+  disabled,
   clearError,
 }: {
   field: (typeof fields)[number];
   error?: string;
+  disabled: boolean;
   clearError: () => void;
 }) {
   const errorId = `eco-buyer-${field.name}-error`;
@@ -256,6 +356,7 @@ function BuyerFieldInput({
         aria-invalid={Boolean(error)}
         aria-describedby={error ? errorId : undefined}
         onChange={error ? clearError : undefined}
+        disabled={disabled}
       />
       {error && (
         <p id={errorId} className={styles.fieldError}>

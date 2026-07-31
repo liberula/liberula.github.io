@@ -11,6 +11,10 @@ const SANDBOX_CHECKOUT_HOSTS = new Set([
   "sandbox.mercadopago.com",
   "sandbox.mercadopago.com.br",
 ]);
+const PRODUCTION_CHECKOUT_HOSTS = new Set([
+  "www.mercadopago.com",
+  "www.mercadopago.com.br",
+]);
 const PRODUCTION_ORIGINS = new Set([
   "https://liberula.com",
   "https://www.liberula.com",
@@ -143,7 +147,26 @@ export type EcoApiConfig = {
   supabaseUrl?: string;
   supabaseServiceRoleKey?: string;
   mercadoPagoAccessToken?: string;
+  mercadoPagoEnvironment?: "test" | "production";
   statusRateLimitSalt?: string;
+};
+
+type EcoLogEntry = {
+  event: string;
+  requestId?: string;
+  stage?: string;
+  campaignId?: string;
+  durationMs?: number;
+  hasReferral?: boolean;
+  reused?: boolean;
+  errorType?: string;
+  errorCode?: string;
+  upstreamStatus?: number;
+  safeMessage?: string;
+  missingKey?: string;
+  claimReleaseFailed?: boolean;
+  campaign_id?: string;
+  has_referral?: boolean;
 };
 
 export type EcoApiDependencies = {
@@ -152,14 +175,22 @@ export type EcoApiDependencies = {
   mercadoPago: MercadoPagoAdapter;
   sleep?: (milliseconds: number) => Promise<void>;
   logger?: {
-    error: (message: string) => void;
-    info?: (entry: {
-      event: "eco_referral_order_created";
-      campaign_id: "eco-sp-001-founder";
-      has_referral: true;
-    }) => void;
+    error: (entry: string | EcoLogEntry) => void;
+    info?: (entry: EcoLogEntry) => void;
   };
 };
+
+class OperationalError extends Error {
+  constructor(
+    readonly errorType: "database" | "mercado_pago" | "application",
+    readonly errorCode: string,
+    readonly safeMessage: string,
+    readonly upstreamStatus?: number,
+  ) {
+    super(errorCode);
+    this.name = "OperationalError";
+  }
+}
 
 type ParsedBody =
   | { ok: true; value: unknown }
@@ -398,12 +429,17 @@ function requestRoute(request: Request): string {
   return pathname;
 }
 
-function sandboxCheckoutUrl(value: string): string | null {
+function configuredCheckoutUrl(
+  value: string,
+  environment: "test" | "production",
+): string | null {
   try {
     const url = new URL(value);
     if (
       url.protocol !== "https:" ||
-      !SANDBOX_CHECKOUT_HOSTS.has(url.hostname)
+      !(environment === "test"
+        ? SANDBOX_CHECKOUT_HOSTS
+        : PRODUCTION_CHECKOUT_HOSTS).has(url.hostname)
     ) {
       return null;
     }
@@ -414,7 +450,7 @@ function sandboxCheckoutUrl(value: string): string | null {
 }
 
 function paymentReturnUrl(siteOrigin: string, orderReference: string): string {
-  const url = new URL("/eco/eco-sp-001/status", siteOrigin);
+  const url = new URL("/eco/eco-sp-001/comprar", siteOrigin);
   url.searchParams.set("order", orderReference);
   return url.toString();
 }
@@ -432,14 +468,81 @@ function webhookUrl(supabaseUrl: string): string | null {
   }
 }
 
-function validOrderConfiguration(config: EcoApiConfig): boolean {
-  return Boolean(
-    config.supabaseUrl &&
-      config.supabaseServiceRoleKey &&
-      config.mercadoPagoAccessToken &&
-      /^TEST-/u.test(config.mercadoPagoAccessToken) &&
-      webhookUrl(config.supabaseUrl),
-  );
+function orderConfigurationIssue(
+  config: EcoApiConfig,
+): { errorCode: string; safeMessage: string; missingKey?: string } | null {
+  for (
+    const [key, present] of [
+      ["SUPABASE_URL", Boolean(config.supabaseUrl)],
+      ["SUPABASE_SERVICE_ROLE_KEY", Boolean(config.supabaseServiceRoleKey)],
+      ["MERCADO_PAGO_ACCESS_TOKEN", Boolean(config.mercadoPagoAccessToken)],
+      [
+        "MERCADO_PAGO_ENVIRONMENT",
+        config.mercadoPagoEnvironment === "test" ||
+        config.mercadoPagoEnvironment === "production",
+      ],
+    ] as const
+  ) {
+    if (!present) {
+      return {
+        errorCode: "missing_configuration",
+        safeMessage: "required server configuration is missing",
+        missingKey: key,
+      };
+    }
+  }
+  if (!webhookUrl(config.supabaseUrl!)) {
+    return {
+      errorCode: "invalid_supabase_url",
+      safeMessage: "server callback URL is invalid",
+      missingKey: "SUPABASE_URL",
+    };
+  }
+  return null;
+}
+
+function operationalFailure(error: unknown): {
+  errorType: string;
+  errorCode: string;
+  safeMessage: string;
+  upstreamStatus?: number;
+} {
+  if (error instanceof OperationalError) {
+    return {
+      errorType: error.errorType,
+      errorCode: error.errorCode,
+      safeMessage: error.safeMessage,
+      ...(error.upstreamStatus === undefined
+        ? {}
+        : { upstreamStatus: error.upstreamStatus }),
+    };
+  }
+  return {
+    errorType: "application",
+    errorCode: "unexpected_failure",
+    safeMessage: "unexpected operation failure",
+  };
+}
+
+function logOrderFailure(
+  dependencies: EcoApiDependencies,
+  requestId: string,
+  stage: string,
+  error: unknown,
+  startedAt: number,
+  claimReleaseFailed = false,
+  extra: Pick<EcoLogEntry, "missingKey"> = {},
+) {
+  dependencies.logger?.error({
+    event: "eco_order_failed",
+    requestId,
+    stage,
+    campaignId: ECO_CAMPAIGN.id,
+    durationMs: Date.now() - startedAt,
+    ...operationalFailure(error),
+    ...(claimReleaseFailed ? { claimReleaseFailed: true } : {}),
+    ...extra,
+  });
 }
 
 async function handleValidate(
@@ -514,8 +617,31 @@ async function handleOrder(
   origin: string,
   dependencies: EcoApiDependencies,
 ): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  const startedAt = Date.now();
   const { config, orders, mercadoPago } = dependencies;
-  if (!validOrderConfiguration(config)) {
+  dependencies.logger?.info?.({
+    event: "eco_order_started",
+    requestId,
+    stage: "request_validation",
+    campaignId: ECO_CAMPAIGN.id,
+  });
+
+  const configurationIssue = orderConfigurationIssue(config);
+  if (configurationIssue) {
+    logOrderFailure(
+      dependencies,
+      requestId,
+      "configuration_validation",
+      new OperationalError(
+        "application",
+        configurationIssue.errorCode,
+        configurationIssue.safeMessage,
+      ),
+      startedAt,
+      false,
+      { missingKey: configurationIssue.missingKey },
+    );
     return json(503, { error: "service_unavailable" }, origin);
   }
   if (!isJsonContentType(request.headers.get("content-type"))) {
@@ -545,6 +671,24 @@ async function handleOrder(
     return json(400, { error: "invalid_request" }, origin);
   }
   const referralCode = normalizeReferralCode(parsed.value.referralCode);
+  const hasReferral = referralCode !== null;
+
+  function successResponse(
+    status: 200 | 201,
+    body: JsonObject,
+    reused: boolean,
+  ) {
+    dependencies.logger?.info?.({
+      event: "eco_order_succeeded",
+      requestId,
+      stage: "response_created",
+      campaignId: ECO_CAMPAIGN.id,
+      durationMs: Date.now() - startedAt,
+      hasReferral,
+      reused,
+    });
+    return json(status, body, origin);
+  }
 
   let order: OrderRecord;
   try {
@@ -561,43 +705,83 @@ async function handleOrder(
         has_referral: true,
       });
     }
-  } catch {
-    dependencies.logger?.error("[eco-sp-001-api] order persistence failed");
+  } catch (error) {
+    logOrderFailure(
+      dependencies,
+      requestId,
+      "order_rpc",
+      error,
+      startedAt,
+    );
     return json(503, { error: "service_unavailable" }, origin);
   }
 
   if (order.checkoutUrl) {
-    const checkoutUrl = sandboxCheckoutUrl(order.checkoutUrl);
+    const checkoutUrl = configuredCheckoutUrl(
+      order.checkoutUrl,
+      config.mercadoPagoEnvironment!,
+    );
     if (!checkoutUrl) {
+      logOrderFailure(
+        dependencies,
+        requestId,
+        "existing_checkout_validation",
+        new OperationalError(
+          "application",
+          "invalid_stored_checkout_url",
+          "stored checkout URL is invalid",
+        ),
+        startedAt,
+      );
       return json(503, { error: "service_unavailable" }, origin);
     }
-    return json(200, {
+    return successResponse(200, {
       checkoutUrl,
       orderReference: order.orderReference,
       referralCode: order.referralCode,
       referralAttributed: order.referralAttributed,
-    }, origin);
+    }, true);
   }
 
   let claim: PreferenceClaim;
   try {
     claim = await orders.claimPreference(order.orderReference);
-  } catch {
-    dependencies.logger?.error("[eco-sp-001-api] preference claim failed");
+  } catch (error) {
+    logOrderFailure(
+      dependencies,
+      requestId,
+      "preference_claim",
+      error,
+      startedAt,
+    );
     return json(503, { error: "service_unavailable" }, origin);
   }
 
   if (claim.state === "existing" || claim.state === "completed") {
-    const checkoutUrl = sandboxCheckoutUrl(claim.checkoutUrl);
+    const checkoutUrl = configuredCheckoutUrl(
+      claim.checkoutUrl,
+      config.mercadoPagoEnvironment!,
+    );
     if (!checkoutUrl) {
+      logOrderFailure(
+        dependencies,
+        requestId,
+        "existing_checkout_validation",
+        new OperationalError(
+          "application",
+          "invalid_stored_checkout_url",
+          "stored checkout URL is invalid",
+        ),
+        startedAt,
+      );
       return json(503, { error: "service_unavailable" }, origin);
     }
-    return json(200, {
+    return successResponse(200, {
       checkoutUrl,
       orderReference: order.orderReference,
       referralCode: order.referralCode,
       referralAttributed: order.referralAttributed,
-    }, origin);
+    }, true);
   }
 
   if (claim.state === "busy") {
@@ -609,20 +793,27 @@ async function handleOrder(
         await sleep(100);
         const current = await orders.getOrder(order.orderReference);
         if (current?.checkoutUrl) {
-          const checkoutUrl = sandboxCheckoutUrl(current.checkoutUrl);
+          const checkoutUrl = configuredCheckoutUrl(
+            current.checkoutUrl,
+            config.mercadoPagoEnvironment!,
+          );
           if (checkoutUrl) {
-            return json(200, {
+            return successResponse(200, {
               checkoutUrl,
               orderReference: order.orderReference,
               referralCode: current.referralCode,
               referralAttributed: current.referralAttributed,
-            }, origin);
+            }, true);
           }
         }
       }
-    } catch {
-      dependencies.logger?.error(
-        "[eco-sp-001-api] preference reload failed",
+    } catch (error) {
+      logOrderFailure(
+        dependencies,
+        requestId,
+        "preference_reload",
+        error,
+        startedAt,
       );
       return json(503, { error: "service_unavailable" }, origin);
     }
@@ -635,52 +826,107 @@ async function handleOrder(
   }
 
   if (claim.state !== "claimed") {
+    logOrderFailure(
+      dependencies,
+      requestId,
+      "preference_claim",
+      new OperationalError(
+        "application",
+        "invalid_claim_state",
+        "preference claim returned an invalid state",
+      ),
+      startedAt,
+    );
     return json(503, { error: "service_unavailable" }, origin);
+  }
+  const claimToken = claim.claimToken;
+
+  async function releaseClaim(): Promise<boolean> {
+    try {
+      await orders.releasePreferenceClaim(
+        order.orderReference,
+        claimToken,
+      );
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
+  let created: { preferenceId: string; checkoutUrl: string };
+  try {
+    created = await mercadoPago.createPreference(
+      preferenceRequest(order, buyer, config.supabaseUrl!),
+    );
+    const checkoutUrl = configuredCheckoutUrl(
+      created.checkoutUrl,
+      config.mercadoPagoEnvironment!,
+    );
+    if (!created.preferenceId || !checkoutUrl) {
+      throw new OperationalError(
+        "mercado_pago",
+        "invalid_provider_response",
+        "provider response did not contain a checkout URL for the configured environment",
+      );
+    }
+    created = { ...created, checkoutUrl };
+  } catch (error) {
+    const releaseFailed = await releaseClaim();
+    logOrderFailure(
+      dependencies,
+      requestId,
+      "mercado_pago_preference",
+      error,
+      startedAt,
+      releaseFailed,
+    );
+    return json(502, { error: "checkout_unavailable" }, origin);
   }
 
   try {
-    const created = await mercadoPago.createPreference(
-      preferenceRequest(order, buyer, config.supabaseUrl!),
-    );
-    const checkoutUrl = sandboxCheckoutUrl(created.checkoutUrl);
-    if (!created.preferenceId || !checkoutUrl) {
-      throw new Error("invalid_provider_response");
-    }
-
     const completed = await orders.completePreference(
       order.orderReference,
-      claim.claimToken,
+      claimToken,
       created.preferenceId,
-      checkoutUrl,
+      created.checkoutUrl,
     );
     if (
       completed.state !== "completed" &&
       completed.state !== "existing"
     ) {
-      throw new Error("preference_persistence_failed");
+      throw new OperationalError(
+        "database",
+        "preference_persistence_failed",
+        "checkout preference could not be persisted",
+      );
     }
-    const persistedUrl = sandboxCheckoutUrl(completed.checkoutUrl);
-    if (!persistedUrl) throw new Error("invalid_persisted_checkout_url");
+    const persistedUrl = configuredCheckoutUrl(
+      completed.checkoutUrl,
+      config.mercadoPagoEnvironment!,
+    );
+    if (!persistedUrl) {
+      throw new OperationalError(
+        "database",
+        "invalid_persisted_checkout_url",
+        "persisted checkout URL is invalid",
+      );
+    }
 
-    return json(201, {
+    return successResponse(201, {
       checkoutUrl: persistedUrl,
       orderReference: order.orderReference,
       referralCode: order.referralCode,
       referralAttributed: order.referralAttributed,
-    }, origin);
-  } catch {
-    try {
-      await orders.releasePreferenceClaim(
-        order.orderReference,
-        claim.claimToken,
-      );
-    } catch {
-      dependencies.logger?.error(
-        "[eco-sp-001-api] preference claim release failed",
-      );
-    }
-    dependencies.logger?.error(
-      "[eco-sp-001-api] preference creation failed",
+    }, false);
+  } catch (error) {
+    const releaseFailed = await releaseClaim();
+    logOrderFailure(
+      dependencies,
+      requestId,
+      "checkout_persistence",
+      error,
+      startedAt,
+      releaseFailed,
     );
     return json(502, { error: "checkout_unavailable" }, origin);
   }
@@ -875,7 +1121,53 @@ function supabaseHeaders(serviceRoleKey: string): HeadersInit {
   };
 }
 
-function createSupabaseOrderRepository(
+function safeErrorCode(value: unknown, fallback: string): string {
+  return typeof value === "string" && /^[A-Za-z0-9_.:-]{1,80}$/u.test(value)
+    ? value
+    : fallback;
+}
+
+function sensitiveStrings(value: unknown): string[] {
+  if (typeof value === "string") return value.length >= 3 ? [value] : [];
+  if (Array.isArray(value)) return value.flatMap(sensitiveStrings);
+  if (isPlainObject(value)) {
+    return Object.values(value).flatMap(sensitiveStrings);
+  }
+  return [];
+}
+
+function sanitizeUpstreamMessage(
+  value: unknown,
+  secrets: string[],
+  fallback: string,
+): string {
+  if (typeof value !== "string" || value.length === 0) return fallback;
+  let sanitized = value.replace(/[\r\n\t]+/gu, " ");
+  for (const secret of secrets.sort((a, b) => b.length - a.length)) {
+    sanitized = sanitized.split(secret).join("[redacted]");
+  }
+  sanitized = sanitized
+    .replace(/[^\s@]+@[^\s@]+/gu, "[redacted-email]")
+    .replace(/https?:\/\/\S+/giu, "[redacted-url]")
+    .replace(/\b\d{7,}\b/gu, "[redacted-number]")
+    .replace(/\b(?:Bearer|Basic)\s+\S+/giu, "[redacted-authorization]")
+    .slice(0, 200)
+    .trim();
+  return sanitized || fallback;
+}
+
+async function responseJson(response: Response): Promise<JsonObject | null> {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    const value: unknown = JSON.parse(text);
+    return isPlainObject(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function createSupabaseOrderRepository(
   supabaseUrl?: string,
   serviceRoleKey?: string,
 ): OrderRepository {
@@ -896,8 +1188,28 @@ function createSupabaseOrderRepository(
       headers: supabaseHeaders(key),
       body: JSON.stringify(body),
     });
-    if (!response.ok) throw new Error("database_rpc_failed");
-    return await response.json();
+    const value = await responseJson(response);
+    if (!response.ok) {
+      throw new OperationalError(
+        "database",
+        safeErrorCode(value?.code, "database_rpc_failed"),
+        sanitizeUpstreamMessage(
+          value?.message,
+          sensitiveStrings(body),
+          "database RPC returned an error",
+        ),
+        response.status,
+      );
+    }
+    if (value === null) {
+      throw new OperationalError(
+        "database",
+        "database_invalid_json",
+        "database RPC returned an invalid response",
+        response.status,
+      );
+    }
+    return value;
   }
 
   async function selectOrder(
@@ -1022,15 +1334,21 @@ function createSupabaseOrderRepository(
   };
 }
 
-function createMercadoPagoAdapter(
+export function createMercadoPagoAdapter(
   accessToken?: string,
+  fetcher: typeof fetch = fetch,
+  environment: "test" | "production" = "test",
 ): MercadoPagoAdapter {
   return {
     async createPreference(request) {
-      if (!accessToken || !/^TEST-/u.test(accessToken)) {
-        throw new Error("missing_or_live_provider_configuration");
+      if (!accessToken) {
+        throw new OperationalError(
+          "application",
+          "missing_configuration",
+          "Mercado Pago configuration is missing",
+        );
       }
-      const response = await fetch(
+      const response = await fetcher(
         "https://api.mercadopago.com/checkout/preferences",
         {
           method: "POST",
@@ -1073,15 +1391,54 @@ function createMercadoPagoAdapter(
           }),
         },
       );
-      if (!response.ok) throw new Error("provider_request_failed");
-      const value = await response.json() as JsonObject;
-      if (value.live_mode === true) {
-        throw new Error("production_provider_response");
+      const value = await responseJson(response);
+      const sensitive = [
+        accessToken,
+        request.buyer.name,
+        request.buyer.email,
+        request.buyer.whatsapp,
+        request.buyer.address.street,
+        request.buyer.address.number,
+        request.buyer.address.complement,
+        request.buyer.address.neighborhood,
+        request.buyer.address.city,
+        request.buyer.address.postalCode,
+        request.externalReference,
+        request.providerIdempotencyKey,
+      ].filter((entry) => entry.length >= 3);
+      if (value === null) {
+        throw new OperationalError(
+          "mercado_pago",
+          "provider_invalid_json",
+          "Mercado Pago returned an invalid response",
+          response.status,
+        );
+      }
+      if (!response.ok) {
+        throw new OperationalError(
+          "mercado_pago",
+          safeErrorCode(
+            value?.error ?? value?.code,
+            "provider_request_failed",
+          ),
+          sanitizeUpstreamMessage(
+            value?.message,
+            sensitive,
+            "Mercado Pago rejected the preference",
+          ),
+          response.status,
+        );
       }
       return {
         preferenceId: typeof value.id === "string" ? value.id : "",
-        checkoutUrl: typeof value.sandbox_init_point === "string"
-          ? value.sandbox_init_point
+        checkoutUrl: typeof (
+            environment === "test" ? value.sandbox_init_point : value.init_point
+          ) === "string"
+          ? String(
+            environment === "test"
+              ? value.sandbox_init_point
+              : value.init_point,
+          )
           : "",
       };
     },
@@ -1095,6 +1452,10 @@ if (import.meta.main) {
     supabaseUrl: Deno.env.get("SUPABASE_URL"),
     supabaseServiceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
     mercadoPagoAccessToken: Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"),
+    mercadoPagoEnvironment: Deno.env.get("MERCADO_PAGO_ENVIRONMENT") as
+      | "test"
+      | "production"
+      | undefined,
     statusRateLimitSalt: Deno.env.get("ECO_STATUS_RATE_LIMIT_SALT"),
   };
   Deno.serve(createEcoApiHandler({
@@ -1105,9 +1466,14 @@ if (import.meta.main) {
     ),
     mercadoPago: createMercadoPagoAdapter(
       config.mercadoPagoAccessToken,
+      fetch,
+      config.mercadoPagoEnvironment,
     ),
     logger: {
-      error: (message) => console.error(message),
+      error: (entry) =>
+        console.error(
+          typeof entry === "string" ? entry : JSON.stringify(entry),
+        ),
       info: (entry) => console.info(JSON.stringify(entry)),
     },
   }));

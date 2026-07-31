@@ -440,7 +440,7 @@
 .transcript p {
   position: relative;
   margin: 0;
-  padding: 20px 22px 20px 154px;
+  padding: 20px 22px 20px 94px;
   border-top: 1px solid rgba(232, 229, 220, 0.12);
   color: #d8d4cb;
   line-height: 1.72;
@@ -450,11 +450,19 @@
   border-bottom: 1px solid rgba(232, 229, 220, 0.12);
 }
 
-.transcript span {
+.transcriptTime {
   position: absolute;
   top: 23px;
   left: 20px;
   color: #d94b55;
+  font: 700 0.68rem/1.3 monospace;
+  letter-spacing: 0.12em;
+}
+
+.transcriptSpeaker {
+  margin-bottom: 7px;
+  display: block;
+  color: #aaa69d;
   font: 700 0.68rem/1.3 monospace;
   letter-spacing: 0.12em;
 }
@@ -631,6 +639,7 @@
   cursor: pointer;
   font: 800 0.78rem/1.25 Roboto, Arial, sans-serif;
   letter-spacing: 0.1em;
+  text-decoration: none;
 }
 
 .offerCta:hover {
@@ -638,7 +647,7 @@
 }
 
 .offerCta:focus-visible,
-.formSectionHeading h3:focus-visible {
+.formSectionHeading h2:focus-visible {
   outline: 3px solid #f0a2a7;
   outline-offset: 3px;
 }
@@ -960,6 +969,111 @@
   font-size: 0.86rem;
 }
 
+.purchaseContent {
+  width: min(100% - 40px, 860px);
+  padding-top: clamp(48px, 7vw, 84px);
+  padding-bottom: 80px;
+}
+
+.purchaseIntro {
+  max-width: 700px;
+}
+
+.purchaseIntro h1 {
+  margin-top: 12px;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+}
+
+.purchaseIntro > p:last-child {
+  margin: 20px 0 0;
+  color: #bbb7ae;
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.purchaseSummary,
+.purchaseFormPanel {
+  margin-top: 36px;
+  padding: clamp(24px, 5vw, 44px);
+  border: 1px solid rgba(232, 229, 220, 0.2);
+  background: #111313;
+}
+
+.purchaseSummary .price {
+  margin-top: 28px;
+}
+
+.purchaseFormPanel .buyerForm {
+  margin-top: 0;
+}
+
+.purchaseRecovery {
+  width: min(100%, 620px);
+  margin: 8vh auto 0;
+  padding: clamp(28px, 6vw, 52px);
+  border: 1px solid rgba(217, 75, 85, 0.45);
+  background: #111313;
+  text-align: center;
+}
+
+.purchaseRecovery > svg {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 20px;
+  color: #e06a72;
+}
+
+.purchaseRecovery p:not(.protocol) {
+  margin: 20px 0 0;
+  color: #bbb7ae;
+  line-height: 1.7;
+}
+
+.purchaseRecovery a {
+  min-height: 46px;
+  margin-top: 28px;
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  background: #b62430;
+  color: #fff;
+  font: 800 0.75rem/1 Roboto, Arial, sans-serif;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+}
+
+.purchaseRecovery a:focus-visible {
+  outline: 3px solid #f0a2a7;
+  outline-offset: 3px;
+}
+
+.purchaseStatus {
+  display: flex;
+  min-height: calc(100vh - 220px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.purchaseCampaignId {
+  margin: 24px 0 0;
+  color: #77736c;
+  font: 0.72rem/1.5 monospace;
+  text-align: center;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .statusPage {
   min-height: 100vh;
   background:
@@ -1168,6 +1282,18 @@
     padding-bottom: 64px;
   }
 
+  .purchaseContent {
+    width: min(100% - 28px, 860px);
+    padding-top: 42px;
+    padding-bottom: 56px;
+  }
+
+  .purchaseSummary,
+  .purchaseFormPanel,
+  .purchaseRecovery {
+    padding: 22px;
+  }
+
   .dossier,
   .panel {
     padding: 22px;
@@ -1187,12 +1313,12 @@
   }
 
   .transcript p {
-    padding: 48px 16px 18px;
+    padding: 18px 16px 18px 76px;
   }
 
-  .transcript span {
-    top: 18px;
-    left: 16px;
+  .transcriptTime {
+    top: 21px;
+    left: 14px;
   }
 
   .recordMetadata {

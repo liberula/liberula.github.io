@@ -10,14 +10,13 @@ export const REVEAL_STAGES = {
   report: 4,
   containment: 5,
   evidence: 6,
-  conclusion: 7,
-  offer: 8,
+  offer: 7,
 };
 
 export const LAST_REVEAL_STEP = REVEAL_STAGES.offer;
 
-const STANDARD_DELAYS = [650, 700, 700, 800, 1100, 950, 900, 900];
-const REDUCED_MOTION_DELAYS = [30, 30, 30, 30, 40, 40, 40, 40];
+const STANDARD_DELAYS = [650, 700, 700, 800, 1100, 950, 900];
+const REDUCED_MOTION_DELAYS = [30, 30, 30, 30, 40, 40, 40];
 
 export function getRevealDelay(step, reducedMotion = false) {
   const delays = reducedMotion ? REDUCED_MOTION_DELAYS : STANDARD_DELAYS;
