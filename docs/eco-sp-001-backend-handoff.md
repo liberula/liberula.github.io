@@ -1,77 +1,106 @@
-# ECO-SP-001 backend handoff
+# ECO-SP-001 — operação do validador
 
-This repository currently delivers only the static client for the case. Do not
-put the canonical answer, Cloudflare secrets, or validation fallback logic in
-the Next.js application.
+O caso usa o Edge Function `eco-sp-001-api`. A resposta canônica e suas
+equivalências são configurações exclusivas do servidor e nunca devem receber o
+prefixo `NEXT_PUBLIC_`.
 
-## Future endpoint contract
+## Configuração
 
-Create a Cloudflare Pages Function at the route:
+Mantenha a resposta canônica separada:
 
-`POST /api/eco/eco-sp-001/validate`
-
-The browser sends:
-
-```json
-{ "answer": "normalized user input" }
+```text
+ECO_SP_001_ANSWER=Posto de Serviços Telefônica
 ```
 
-Successful validation returns one of these responses with HTTP 200:
+Configure `ECO_SP_001_ANSWER_ALIASES` como um array JSON de strings:
 
 ```json
-{ "correct": true }
+[
+  "Posto Telefônica",
+  "Posto de Serviços Telefônica Benjamin Constant",
+  "Posto de Serviços Telefônica da Rua Benjamin Constant",
+  "Posto Telefônica Benjamin Constant",
+  "Central Telefônica Benjamin Constant",
+  "Central Telefônica da Rua Benjamin Constant",
+  "Antiga Central Telefônica da Benjamin Constant",
+  "Antiga Central Telefônica da Rua Benjamin Constant",
+  "Rua Benjamin Constant 196",
+  "R. Benjamin Constant 196",
+  "Benjamin Constant 196",
+  "Rua Benjamin Constant 196 Sé",
+  "Rua Benjamin Constant 196 São Paulo",
+  "Rua Benjamin Constant 196 Sé São Paulo"
+]
 ```
 
-```json
-{ "correct": false }
+Revise manualmente qualquer inclusão. Não adicione descrições amplas como
+`central antiga`, nomes de bairro isolados ou endereços sem número. O validador
+normaliza cada entrada e faz somente igualdade exata; ele não usa busca parcial
+ou aproximação.
+
+Uma alteração nos aliases requer novo deploy (ou reinício equivalente no fluxo
+vigente da Supabase) do Edge Function para que as instâncias passem a usar a
+nova configuração.
+
+## Configuração no projeto Supabase
+
+No PowerShell, a partir da raiz do repositório:
+
+```powershell
+$aliases = @'
+["Posto Telefônica","Posto de Serviços Telefônica Benjamin Constant","Posto de Serviços Telefônica da Rua Benjamin Constant","Posto Telefônica Benjamin Constant","Central Telefônica Benjamin Constant","Central Telefônica da Rua Benjamin Constant","Antiga Central Telefônica da Benjamin Constant","Antiga Central Telefônica da Rua Benjamin Constant","Rua Benjamin Constant 196","R. Benjamin Constant 196","Benjamin Constant 196","Rua Benjamin Constant 196 Sé","Rua Benjamin Constant 196 São Paulo","Rua Benjamin Constant 196 Sé São Paulo"]
+'@
+
+supabase secrets set --project-ref icjuacgxxpmwqlmjmeuq "ECO_SP_001_ANSWER_ALIASES=$aliases"
+supabase functions deploy eco-sp-001-api --project-ref icjuacgxxpmwqlmjmeuq
 ```
 
-All responses must use `Content-Type: application/json; charset=utf-8` and
-`Cache-Control: no-store`. An internal or configuration failure should return a
-generic JSON error with HTTP 500 or 503. It must not identify the missing
-variable or disclose the answer.
+Não imprima nem registre o valor dos secrets depois da configuração.
 
-## Cloudflare setup for the later backend plan
+## Smoke test
 
-1. Confirm the Cloudflare Pages project serving `liberula.com`.
-2. Add a Pages Function mapped to
-   `/api/eco/eco-sp-001/validate`. Keep it outside the public Next.js bundle.
-3. Read the canonical answer only from the server-side binding
-   `ECO_SP_001_ANSWER`.
-4. Configure that binding separately for local/preview and production
-   environments in Cloudflare. Do not prefix it with `NEXT_PUBLIC_`.
-5. Accept only `POST`. Reject other methods with HTTP 405.
-6. Require an `application/json` request and limit the request body to a small
-   size, such as 4 KiB.
-7. Require a plain object with one string property named `answer`. Reject empty
-   or excessively long answers with HTTP 400.
-8. Normalize both the submitted value and the environment value independently:
-   Unicode NFD normalization, removal of Unicode diacritic marks, Portuguese
-   locale lowercase conversion, trimming, and collapse of internal whitespace.
-9. Compare the two normalized strings and return only `{ "correct": boolean }`.
-10. Never log the submitted answer, canonical answer, request body, or secret
-    binding.
-11. Apply same-origin protection appropriate to the final Pages deployment and
-    include `Cache-Control: no-store` on every response.
+Defina uma função auxiliar local, que envia somente o exemplo informado:
 
-The normalization behavior is demonstrated without a canonical value in
-`app/eco/eco-sp-001/answer-normalization.mjs`. The server implementation must
-apply the rules itself rather than trusting that the browser normalized input.
+```powershell
+$endpoint = 'https://icjuacgxxpmwqlmjmeuq.supabase.co/functions/v1/eco-sp-001-api/validate'
+function Test-EcoAnswer([string]$answer) {
+  $body = @{ answer = $answer } | ConvertTo-Json -Compress
+  Invoke-RestMethod -Method Post -Uri $endpoint -ContentType 'application/json' -Headers @{ Origin = 'https://liberula.com' } -Body $body
+}
+```
 
-## Backend tests required by the later plan
+Respostas que devem retornar `{ "correct": true }`:
 
-Use an injected environment value in automated tests; do not hard-code the real
-answer. Cover:
+```powershell
+Test-EcoAnswer 'Posto Telefônica'
+Test-EcoAnswer 'Central Telefônica Benjamin Constant'
+Test-EcoAnswer 'R. Benjamin Constant, 196'
+Test-EcoAnswer 'Rua Benjamin Constant 196 Sé São Paulo'
+```
 
-- exact match;
-- lowercase and uppercase variants;
-- accented and unaccented variants;
-- leading, trailing, and repeated internal whitespace;
-- incorrect answer;
-- empty, non-string, malformed JSON, oversized, and wrong-method requests;
-- missing `ECO_SP_001_ANSWER`;
-- generic, non-leaking error responses;
-- `Cache-Control: no-store`.
+Respostas que devem retornar `{ "correct": false }`:
 
-After building the static site, search the generated `out` directory for the
-production answer and all server-only environment values before deployment.
+```powershell
+Test-EcoAnswer 'Central telefônica'
+Test-EcoAnswer 'Central antiga'
+Test-EcoAnswer 'Benjamin Constant'
+Test-EcoAnswer 'Rua Benjamin Constant'
+Test-EcoAnswer 'Rua Benjamin Constant 195'
+```
+
+Inspecione todas as respostas e confirme que elas contêm somente `correct`.
+Nenhuma resposta pode revelar a resposta canônica, aliases, valor normalizado,
+dicas ou detalhes de similaridade.
+
+## Validação local
+
+```powershell
+deno test --allow-all supabase/functions/eco-sp-001-api
+npm test
+npm run lint
+npm run build
+git diff --check
+```
+
+Depois da exportação, confirme também que nenhum valor configurado no servidor
+foi incluído no diretório `out`.

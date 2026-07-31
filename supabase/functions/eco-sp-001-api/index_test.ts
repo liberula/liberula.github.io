@@ -5,9 +5,12 @@ import {
   createMercadoPagoAdapter,
   ECO_PRODUCT,
   type EcoApiConfig,
+  isAcceptedCaseAnswer,
   type MercadoPagoAdapter,
+  normalizeCaseAnswer,
   type OrderRecord,
   type OrderRepository,
+  parseAcceptedAnswers,
   type PreferenceClaim,
   type PreferenceRequest,
 } from "./index.ts";
@@ -307,6 +310,164 @@ Deno.test("answer validation normalizes case, accents, and whitespace", async ()
   }
 });
 
+Deno.test("case-answer normalization handles punctuation, street notation, and numeric separators", () => {
+  assertEquals(
+    normalizeCaseAnswer("R. Exemplo, 123"),
+    normalizeCaseAnswer("Rua Exemplo 123"),
+    "street abbreviation should normalize",
+  );
+  assertEquals(
+    normalizeCaseAnswer("Rua   Exemplo, 123"),
+    "rua exemplo 123",
+    "punctuation and whitespace should normalize",
+  );
+  assertEquals(
+    normalizeCaseAnswer("CEP 01005-000"),
+    normalizeCaseAnswer("CEP 01005000"),
+    "numeric address punctuation should be removed",
+  );
+  assert(
+    normalizeCaseAnswer("Rua Exemplo") !==
+      normalizeCaseAnswer("Rua Exemplo 123"),
+    "address number must remain meaningful",
+  );
+});
+
+Deno.test("accepted-answer parser includes canonical, deduplicates, and permits absent or empty aliases", () => {
+  for (const aliasesJson of [undefined, "[]"]) {
+    const accepted = parseAcceptedAnswers(
+      "Arquivo Técnico Aurora",
+      aliasesJson,
+    );
+    assert(accepted !== null, "valid configuration should parse");
+    assert(
+      isAcceptedCaseAnswer("ARQUIVO TECNICO AURORA", accepted),
+      "canonical answer should be included automatically",
+    );
+  }
+
+  const accepted = parseAcceptedAnswers(
+    "Arquivo Técnico Aurora",
+    JSON.stringify([
+      "Posto Aurora",
+      "posto aurora",
+      "POSTO ÁURORA",
+    ]),
+  );
+  assert(accepted !== null, "aliases should parse");
+  assert(accepted.size === 2, "normalized duplicates should be removed");
+});
+
+Deno.test("accepted-answer parser rejects malformed or unsafe configuration", () => {
+  const malformed = [
+    "",
+    "not json",
+    "null",
+    "{}",
+    "123",
+    '"alias"',
+    '["válido", 1]',
+    '["válido", null]',
+    '[["aninhado"]]',
+    '["   "]',
+    JSON.stringify(Array.from({ length: 101 }, (_, index) => `Alias ${index}`)),
+    JSON.stringify(["x".repeat(201)]),
+  ];
+  for (const aliasesJson of malformed) {
+    assert(
+      parseAcceptedAnswers("Arquivo Técnico Aurora", aliasesJson) === null,
+      `configuration should fail: ${aliasesJson.slice(0, 30)}`,
+    );
+  }
+  assert(
+    parseAcceptedAnswers("   ", "[]") === null,
+    "blank canonical answer should fail",
+  );
+});
+
+const productionAliases = JSON.stringify([
+  "Posto Telefônica",
+  "Posto de Serviços Telefônica Benjamin Constant",
+  "Posto de Serviços Telefônica da Rua Benjamin Constant",
+  "Posto Telefônica Benjamin Constant",
+  "Central Telefônica Benjamin Constant",
+  "Central Telefônica da Rua Benjamin Constant",
+  "Antiga Central Telefônica da Benjamin Constant",
+  "Antiga Central Telefônica da Rua Benjamin Constant",
+  "Rua Benjamin Constant 196",
+  "R. Benjamin Constant 196",
+  "Benjamin Constant 196",
+  "Rua Benjamin Constant 196 Sé",
+  "Rua Benjamin Constant 196 São Paulo",
+  "Rua Benjamin Constant 196 Sé São Paulo",
+]);
+
+const productionValidationConfig: EcoApiConfig = {
+  ...completeConfig,
+  answer: "Posto de Serviços Telefônica",
+  answerAliases: productionAliases,
+};
+
+Deno.test("configured ECO-SP-001 equivalents are accepted exactly", async () => {
+  const acceptedAnswers = [
+    "Posto de Serviços Telefônica",
+    "POSTO DE SERVICOS TELEFONICA",
+    "Posto Telefônica",
+    "posto telefonica",
+    "Central Telefônica Benjamin Constant",
+    "central telefonica da rua benjamin constant",
+    "Antiga central telefônica da Benjamin Constant",
+    "Rua Benjamin Constant, 196",
+    "R. Benjamin Constant 196",
+    "Benjamin Constant, 196",
+    "Rua Benjamin Constant, 196, Sé, São Paulo",
+  ];
+  for (const answer of acceptedAnswers) {
+    const response = await dependencies({
+      config: productionValidationConfig,
+    }).handler(apiRequest("/validate", { body: { answer } }));
+    assert(response.status === 200, "accepted answer should return 200");
+    assertEquals(
+      await response.json(),
+      { correct: true },
+      `expected accepted answer: ${answer}`,
+    );
+  }
+});
+
+Deno.test("vague, unrelated, near, prefixed, and suffixed answers remain rejected", async () => {
+  const rejectedAnswers = [
+    "Central telefônica",
+    "Central antiga",
+    "Posto",
+    "Posto de serviços",
+    "Telefônica",
+    "Benjamin Constant",
+    "Rua Benjamin Constant",
+    "196",
+    "Sé",
+    "São Paulo",
+    "Estação Pedro II",
+    "Escola Santi",
+    "Dublin Hotel",
+    "Rua Benjamin Constant 195",
+    "Rua Benjamin Constant 1960",
+    "Posto de Serviços Telefônica errado",
+    "Acho que talvez seja uma central telefônica",
+  ];
+  for (const answer of rejectedAnswers) {
+    const response = await dependencies({
+      config: productionValidationConfig,
+    }).handler(apiRequest("/validate", { body: { answer } }));
+    assert(response.status === 200, "rejected answer should return 200");
+    assertEquals(
+      await response.json(),
+      { correct: false },
+      `expected rejected answer: ${answer}`,
+    );
+  }
+});
+
 Deno.test("incorrect answer returns only correct false", async () => {
   const { handler } = dependencies();
   const response = await handler(apiRequest("/validate", {
@@ -360,6 +521,39 @@ Deno.test("missing answer configuration returns generic service error", async ()
       { error: "service_unavailable" },
       "configuration leaked",
     );
+  }
+});
+
+Deno.test("malformed aliases return a generic service error without logging configured values", async () => {
+  const secretCanonical = "Arquivo Técnico Não Registrar";
+  const secretAlias = "Local Confidencial Não Registrar";
+  const invalidConfigurations = [
+    "not-json",
+    JSON.stringify({ alias: secretAlias }),
+    JSON.stringify([secretAlias, 123]),
+    JSON.stringify(["   "]),
+    JSON.stringify(Array.from({ length: 101 }, (_, index) => `Item ${index}`)),
+  ];
+
+  for (const answerAliases of invalidConfigurations) {
+    const logs: string[] = [];
+    const response = await dependencies({
+      config: {
+        ...completeConfig,
+        answer: secretCanonical,
+        answerAliases,
+      },
+      logs,
+    }).handler(apiRequest("/validate", { body: { answer: secretAlias } }));
+    assert(response.status === 503, "expected generic configuration failure");
+    assertEquals(
+      await response.json(),
+      { error: "service_unavailable" },
+      "configuration details leaked in response",
+    );
+    const logOutput = logs.join(" ");
+    assert(!logOutput.includes(secretCanonical), "canonical leaked in logs");
+    assert(!logOutput.includes(secretAlias), "alias leaked in logs");
   }
 });
 

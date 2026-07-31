@@ -1,6 +1,7 @@
 const VALIDATE_BODY_LIMIT = 4 * 1024;
 const ORDER_BODY_LIMIT = 16 * 1024;
 const ANSWER_MAX_LENGTH = 200;
+const MAX_ANSWER_ALIASES = 100;
 const ORDER_REFERENCE_PATTERN = /^[A-Za-z0-9_-]{16,200}$/;
 const REFERRAL_CODE_PATTERN = /^[A-F0-9]{12}$/;
 const UUID_PATTERN =
@@ -143,6 +144,7 @@ export type MercadoPagoAdapter = {
 
 export type EcoApiConfig = {
   answer?: string;
+  answerAliases?: string;
   allowedOrigins?: string;
   supabaseUrl?: string;
   supabaseServiceRoleKey?: string;
@@ -245,13 +247,67 @@ function digitsOnly(value: unknown): string {
   return normalizeText(value).replace(/\D/gu, "");
 }
 
-export function normalizeAnswer(value: string): string {
-  return value
+export function normalizeCaseAnswer(value: string): string {
+  const normalized = value
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLocaleLowerCase("pt-BR")
+    .replace(/(\p{Number})[.\/-](?=\p{Number})/gu, "$1")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
     .trim()
     .replace(/\s+/gu, " ");
+
+  return normalized
+    .split(" ")
+    .map((token) => token === "r" ? "rua" : token)
+    .join(" ");
+}
+
+// Retained for compatibility with existing server-side imports.
+export const normalizeAnswer = normalizeCaseAnswer;
+
+export function parseAcceptedAnswers(
+  canonical: string,
+  aliasesJson?: string,
+): Set<string> | null {
+  if (typeof canonical !== "string" || !canonical.trim()) return null;
+
+  let aliases: unknown = [];
+  if (aliasesJson !== undefined) {
+    if (typeof aliasesJson !== "string" || !aliasesJson.trim()) return null;
+    try {
+      aliases = JSON.parse(aliasesJson);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!Array.isArray(aliases) || aliases.length > MAX_ANSWER_ALIASES) {
+    return null;
+  }
+
+  const configured = [canonical, ...aliases];
+  const accepted = new Set<string>();
+  for (const value of configured) {
+    if (
+      typeof value !== "string" ||
+      !value.trim() ||
+      value.length > ANSWER_MAX_LENGTH
+    ) {
+      return null;
+    }
+    const normalized = normalizeCaseAnswer(value);
+    if (!normalized) return null;
+    accepted.add(normalized);
+  }
+  return accepted;
+}
+
+export function isAcceptedCaseAnswer(
+  submitted: string,
+  accepted: ReadonlySet<string>,
+): boolean {
+  return accepted.has(normalizeCaseAnswer(submitted));
 }
 
 export function normalizeReferralCode(value: unknown): string | null {
@@ -550,10 +606,11 @@ async function handleValidate(
   origin: string,
   config: EcoApiConfig,
 ): Promise<Response> {
-  const expected = typeof config.answer === "string"
-    ? normalizeAnswer(config.answer)
-    : "";
-  if (!expected) {
+  const accepted = parseAcceptedAnswers(
+    typeof config.answer === "string" ? config.answer : "",
+    config.answerAliases,
+  );
+  if (!accepted) {
     return json(503, { error: "service_unavailable" }, origin);
   }
   if (!isJsonContentType(request.headers.get("content-type"))) {
@@ -573,11 +630,11 @@ async function handleValidate(
     return json(400, { error: "invalid_request" }, origin);
   }
 
-  const submitted = normalizeAnswer(parsed.value.answer);
+  const submitted = normalizeCaseAnswer(parsed.value.answer);
   if (!submitted) {
     return json(400, { error: "invalid_request" }, origin);
   }
-  return json(200, { correct: submitted === expected }, origin);
+  return json(200, { correct: accepted.has(submitted) }, origin);
 }
 
 function preferenceRequest(
@@ -1448,6 +1505,7 @@ export function createMercadoPagoAdapter(
 if (import.meta.main) {
   const config: EcoApiConfig = {
     answer: Deno.env.get("ECO_SP_001_ANSWER"),
+    answerAliases: Deno.env.get("ECO_SP_001_ANSWER_ALIASES"),
     allowedOrigins: Deno.env.get("ECO_ALLOWED_ORIGINS"),
     supabaseUrl: Deno.env.get("SUPABASE_URL"),
     supabaseServiceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),

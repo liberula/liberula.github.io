@@ -127,12 +127,13 @@ test("white-room evidence remains the final narrative visual before commerce", (
   ]);
 });
 
-test("the case public directory contains only the two approved assets", async () => {
+test("the case public directory contains only approved public assets", async () => {
   const publicCaseAssets = await readdir(
     new URL("../public/eco/eco-sp-001/", import.meta.url),
   );
   assert.deepEqual(publicCaseAssets.sort(), [
     "agent-field-record.png",
+    "eco-sp-001-atalho.pdf",
     "white-room-evidence.png",
   ]);
 });
