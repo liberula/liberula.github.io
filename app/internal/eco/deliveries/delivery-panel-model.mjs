@@ -1,9 +1,16 @@
-export const DELIVERY_REFERENCE_PATTERN = /^[A-Za-z0-9_-]{16,200}$/;
-export const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 export function isLocalOperatorHostname(hostname) {
   return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+export function getOperatorStatus(participant) {
+  if (
+    participant?.status === "blocked" || participant?.status === "completed" ||
+    participant?.delivery_status === "cancelled"
+  ) return "blocked";
+  if (participant?.delivery_status === "sending") return "sending";
+  if (participant?.delivery_status === "sent") return "sent";
+  if (participant?.delivery_status === "failed") return "failed";
+  return "not_sent";
 }
 
 export function filterParticipants(participants, filters) {
@@ -14,14 +21,10 @@ export function filterParticipants(participants, filters) {
         .toLocaleLowerCase("pt-BR");
       if (!haystack.includes(search)) return false;
     }
-    if (filters.participantStatus && participant.status !== filters.participantStatus) {
-      return false;
-    }
-    const deliveryStatus = participant.delivery_status ?? "not_prepared";
-    if (filters.deliveryStatus && deliveryStatus !== filters.deliveryStatus) {
-      return false;
-    }
-    if (filters.onlyWithoutDelivery && participant.delivery_id) return false;
+    if (
+      filters.operatorStatus &&
+      getOperatorStatus(participant) !== filters.operatorStatus
+    ) return false;
     return true;
   });
 }
@@ -39,15 +42,21 @@ export function toggleParticipantSelection(selectedIds, participantId, checked) 
 }
 
 export function isSendEligible(participant) {
-  return participant?.delivery_status === "pending" ||
-    (participant?.delivery_status === "failed" && participant.attempt_count < 3);
+  if (getOperatorStatus(participant) === "blocked") return false;
+  if (participant?.delivery_status === "sent" || participant?.delivery_status === "sending") {
+    return false;
+  }
+  if (participant?.delivery_status === "failed") {
+    return Number.isInteger(participant.attempt_count) && participant.attempt_count < 3;
+  }
+  return participant?.delivery_status === null || participant?.delivery_status === "pending";
 }
 
-export function getDeliveryUrl(participant) {
-  if (!participant || !DELIVERY_REFERENCE_PATTERN.test(participant.delivery_reference ?? "")) {
-    return null;
-  }
-  return `https://liberula.com/eco/eco-sp-001/iniciar/?delivery=${
-    encodeURIComponent(participant.delivery_reference)
-  }`;
+export function getSendActionLabel(participant) {
+  return participant?.delivery_status === "failed" ? "TENTAR NOVAMENTE" : "ENVIAR E-MAIL";
+}
+
+export function getOpeningState(participant) {
+  if (participant?.delivery_status !== "sent") return "not_applicable";
+  return participant?.opened_at ? "opened" : "unopened";
 }

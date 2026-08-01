@@ -1,3 +1,5 @@
+import { renderEcoDeliveryEmail } from "../../../lib/eco/delivery-email.mjs";
+
 const MAX_BODY_BYTES = 8 * 1024;
 const MAX_PARTICIPANTS = 10;
 const MAX_DELIVERIES = 10;
@@ -243,114 +245,7 @@ export function buildDeliveryUrl(
   }`;
 }
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) =>
-    ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    })[character] ?? character);
-}
-
-function formatAspirantDisplayName(value: string | null): string {
-  const normalized = value?.trim().replace(/\s+/gu, " ") ?? "";
-  if (!normalized) return "IDENTIDADE NÃO REGISTRADA";
-  return Array.from(normalized.toLocaleUpperCase("pt-BR"))
-    .slice(0, 80)
-    .join("");
-}
-
-export function buildEcoEmblemUrl(publicBaseUrl: string): string | null {
-  const baseUrl = normalizePublicBaseUrl(publicBaseUrl);
-  if (!baseUrl || new URL(baseUrl).protocol !== "https:") return null;
-  return `${baseUrl}/eco/eco-emblem.webp`;
-}
-
-export function buildDeliveryEmailContent(
-  email: DeliveryEmail,
-  publicBaseUrl: string,
-) {
-  const caseLabel = email.caseId.toUpperCase();
-  const displayName = formatAspirantDisplayName(email.participantName);
-  const emblemUrl = buildEcoEmblemUrl(publicBaseUrl);
-  if (!emblemUrl) throw new PostmarkFailure("postmark_configuration_missing");
-  const escapedDisplayName = escapeHtml(displayName);
-  const escapedCase = escapeHtml(caseLabel);
-  const escapedUrl = escapeHtml(email.deliveryUrl);
-  const escapedEmblemUrl = escapeHtml(emblemUrl);
-  const preheader =
-    `Seu acesso individual ao Caso ${caseLabel} está disponível.`;
-  return {
-    subject: `E.C.O. | Acesso autorizado ao Caso ${caseLabel}`,
-    preheader,
-    textBody: `E.C.O.
-ENCONTRAR. CONTER. OCULTAR.
-
-TRANSMISSÃO AUTORIZADA
-CLASSIFICAÇÃO: RESTRITO
-
-ASPIRANTE: ${displayName}
-CASO ${caseLabel}
-
-MATERIAL DE AVALIAÇÃO DISPONÍVEL
-
-O material de avaliação referente ao Caso ${caseLabel} foi liberado para este endereço.
-
-Analise o dossiê e registre sua conclusão utilizando o canal indicado no material.
-
-ACESSAR CASO:
-${email.deliveryUrl}
-
-Se o botão não funcionar, copie e cole o endereço acima no navegador.
-
-Este acesso é individual. Não compartilhe o endereço de transmissão.
-
-E.C.O.
-ENCONTRAR. CONTER. OCULTAR.
-
-Mensagem operacional referente ao acesso solicitado ao Caso ${caseLabel}.`,
-    htmlBody: `<!doctype html>
-<html lang="pt-BR">
-<head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapedCase}</title></head>
-<body style="margin:0;padding:0;background-color:#111111;color:#f2f0e8;font-family:Arial,Helvetica,sans-serif;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">${
-      escapeHtml(preheader)
-    }</div>
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#111111" style="width:100%;background-color:#111111;border-collapse:collapse;">
-<tr><td align="center" style="padding:24px 12px;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#1a1a1a" style="width:100%;max-width:600px;background-color:#1a1a1a;border:1px solid #3a3934;border-collapse:collapse;">
-<tr><td style="padding:32px 28px 24px 28px;border-bottom:1px solid #3a3934;">
-<img src="${escapedEmblemUrl}" width="64" height="64" alt="Emblema da E.C.O." style="display:block;width:64px;height:64px;border:0;margin:0 0 18px 0;">
-<p style="margin:0 0 5px 0;color:#f2f0e8;font-size:22px;line-height:28px;font-weight:bold;letter-spacing:3px;">E.C.O.</p>
-<p style="margin:0;color:#b8b3a7;font-size:11px;line-height:18px;font-weight:bold;letter-spacing:1.5px;">ENCONTRAR. CONTER. OCULTAR.</p>
-</td></tr>
-<tr><td style="padding:24px 28px 0 28px;">
-<p style="margin:0 0 6px 0;color:#d2b65f;font-size:11px;line-height:17px;font-weight:bold;letter-spacing:1.5px;">TRANSMISSÃO AUTORIZADA</p>
-<p style="margin:0 0 28px 0;color:#b8b3a7;font-size:11px;line-height:17px;font-weight:bold;letter-spacing:1.2px;">CLASSIFICAÇÃO: RESTRITO</p>
-<p style="margin:0 0 8px 0;color:#f2f0e8;font-size:14px;line-height:22px;font-weight:bold;letter-spacing:1px;">ASPIRANTE: ${escapedDisplayName}</p>
-<p style="margin:0 0 28px 0;color:#b8b3a7;font-size:13px;line-height:20px;font-weight:bold;letter-spacing:1px;">CASO ${escapedCase}</p>
-<h1 style="margin:0 0 22px 0;color:#f2f0e8;font-size:22px;line-height:30px;font-weight:bold;">MATERIAL DE AVALIAÇÃO DISPONÍVEL</h1>
-<p style="margin:0 0 16px 0;color:#f2f0e8;font-size:15px;line-height:24px;">O material de avaliação referente ao Caso ${escapedCase} foi liberado para este endereço.</p>
-<p style="margin:0 0 28px 0;color:#f2f0e8;font-size:15px;line-height:24px;">Analise o dossiê e registre sua conclusão utilizando o canal indicado no material.</p>
-<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;margin:0 0 28px 0;"><tr><td bgcolor="#d2b65f" style="background-color:#d2b65f;"><a href="${escapedUrl}" style="display:inline-block;padding:15px 24px;color:#111111;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:18px;font-weight:bold;text-decoration:none;letter-spacing:1px;">ACESSAR CASO</a></td></tr></table>
-<p style="margin:0 0 8px 0;color:#b8b3a7;font-size:12px;line-height:20px;">Se o botão não funcionar, copie e cole este endereço no navegador:</p>
-<p style="margin:0 0 24px 0;font-size:12px;line-height:20px;word-break:break-all;overflow-wrap:anywhere;"><a href="${escapedUrl}" style="color:#d2b65f;text-decoration:underline;">${escapedUrl}</a></p>
-<p style="margin:0;padding:18px 0 26px 0;border-top:1px solid #3a3934;color:#f2f0e8;font-size:13px;line-height:21px;font-weight:bold;">Este acesso é individual. Não compartilhe o endereço de transmissão.</p>
-</td></tr>
-<tr><td style="padding:22px 28px;border-top:1px solid #3a3934;">
-<p style="margin:0 0 4px 0;color:#f2f0e8;font-size:13px;line-height:20px;font-weight:bold;letter-spacing:1px;">E.C.O.</p>
-<p style="margin:0 0 14px 0;color:#b8b3a7;font-size:10px;line-height:17px;font-weight:bold;letter-spacing:1px;">ENCONTRAR. CONTER. OCULTAR.</p>
-<p style="margin:0;color:#b8b3a7;font-size:11px;line-height:18px;">Mensagem operacional referente ao acesso solicitado ao Caso ${escapedCase}.</p>
-</td></tr>
-</table>
-</td></tr>
-</table>
-</body>
-</html>`,
-  };
-}
+export const buildDeliveryEmailContent = renderEcoDeliveryEmail;
 
 export function createPostmarkSender(
   configuration: {
@@ -367,17 +262,11 @@ export function createPostmarkSender(
     const fromEmail = configuration.fromEmail?.trim();
     const replyTo = configuration.replyTo?.trim();
     const messageStream = configuration.messageStream?.trim();
-    const emblemUrl = configuration.publicBaseUrl
-      ? buildEcoEmblemUrl(configuration.publicBaseUrl)
-      : null;
-    if (!token || !fromEmail || !replyTo || !messageStream || !emblemUrl) {
+    if (!token || !fromEmail || !replyTo || !messageStream) {
       throw new PostmarkFailure("postmark_configuration_missing");
     }
 
-    const content = buildDeliveryEmailContent(
-      email,
-      configuration.publicBaseUrl!,
-    );
+    const content = renderEcoDeliveryEmail(email);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), POSTMARK_TIMEOUT_MS);
     let response: Response;

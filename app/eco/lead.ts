@@ -48,7 +48,7 @@ export type EcoLeadPayload = {
 };
 
 export type EcoLeadResult = { duplicate: boolean };
-export type EcoLeadErrorKind = "submission" | "configuration";
+export type EcoLeadErrorKind = "submission" | "configuration" | "closed";
 
 export class EcoLeadSubmissionError extends Error {
   constructor(
@@ -64,6 +64,7 @@ export class EcoLeadSubmissionError extends Error {
 type ServiceResponse = {
   success?: boolean;
   duplicate?: boolean;
+  error?: string;
 };
 
 async function readResponse(response: Response): Promise<ServiceResponse> {
@@ -114,6 +115,9 @@ export async function submitEcoLead(data: EcoLeadInput): Promise<EcoLeadResult> 
 
   const body = await readResponse(response);
   if (!response.ok) {
+    if (response.status === 410 && body.error === "recruitment_closed") {
+      throw new EcoLeadSubmissionError("Recruitment is closed", "closed", response.status);
+    }
     throw new EcoLeadSubmissionError("Lead submission failed", "submission", response.status);
   }
   if (body.success === true) return { duplicate: body.duplicate === true };

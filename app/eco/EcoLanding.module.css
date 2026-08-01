@@ -49,9 +49,6 @@
 .primaryButton:hover, .submitButton:hover:not(:disabled) { background: #b92926; transform: translateY(-1px); }
 .primaryButton:focus-visible, .submitButton:focus-visible, .inputWrap:focus-within, .consentField input:focus-visible, .privacyNote a:focus-visible { outline: 2px solid #ef5b56; outline-offset: 3px; }
 .microcopy { margin: 12px 0 0; color: #85817b; font-size: 12px; }
-.heroDeadline { width: min(100%,520px); min-height: 104px; margin-top: 26px; padding: 15px 18px; border-left: 1px solid #8d2926; background: rgba(159,33,31,.07); font-family: "Courier New", monospace; }
-.heroDeadline span, .heroDeadline time { display: block; color: #99958e; font-size: 11px; }
-.heroDeadline strong { display: block; min-height: 26px; margin: 5px 0 2px; color: #e0dcd5; font-size: 15px; font-weight: 400; }
 .heroVisual { min-width: 0; margin-right: -8vw; }
 .heroVisual img { width: min(850px,67vw); height: auto; filter: drop-shadow(0 24px 35px rgba(0,0,0,.75)); }
 .context { overflow: hidden; border-bottom: 1px solid var(--border); }
@@ -75,8 +72,6 @@
 .signupGrid { display: grid; grid-template-columns: minmax(0,.9fr) minmax(480px,1fr); gap: 90px; align-items: start; }
 .signupCopy h2 { margin: 0; font-size: clamp(42px,4vw,58px); line-height: 1.12; }
 .signupCopy > p { max-width: 540px; margin: 22px 0 0; color: var(--muted); }
-.deadlineNotice { max-width: 500px; margin-top: 30px; padding: 18px 20px; border-left: 2px solid #a7221f; background: rgba(159,33,31,.1); color: #cbc7c0; font: 13px "Courier New", monospace; }
-.deadlineNotice strong { color: var(--text); font-weight: 400; }
 .formPanel { min-height: 430px; padding: 34px; border: 1px solid var(--border); background: linear-gradient(145deg,rgba(255,255,255,.025),transparent),var(--surface); }
 .field { margin-bottom: 17px; }
 .field label { display: block; margin-bottom: 7px; color: #d6d2cb; font-size: 13px; }

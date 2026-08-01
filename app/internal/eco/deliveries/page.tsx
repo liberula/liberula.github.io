@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import EcoDeliveryPanel from "./EcoDeliveryPanel";
 
 export const metadata: Metadata = {
-  title: "E.C.O. — Operações de entrega",
+  title: "E.C.O. — Envio de e-mails",
   robots: { index: false, follow: false },
 };
 

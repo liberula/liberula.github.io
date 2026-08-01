@@ -21,8 +21,7 @@ type InsertResult = "created" | "duplicate";
 
 export type EcoLeadDependencies = {
   insertLead: (lead: LeadRecord) => Promise<InsertResult>;
-  now?: () => Date;
-  recruitmentEndAt?: string;
+  recruitmentClosed?: boolean;
 };
 
 function isAllowedOrigin(origin: string): boolean {
@@ -147,8 +146,7 @@ export function createEcoLeadHandler(dependencies: EcoLeadDependencies) {
     const lead = parseLead(payload);
     if (!lead) return json(400, { success: false, error: "invalid_payload" }, origin);
 
-    const endAt = dependencies.recruitmentEndAt;
-    if (endAt && !Number.isNaN(Date.parse(endAt)) && (dependencies.now?.() ?? new Date()).getTime() >= Date.parse(endAt)) {
+    if (dependencies.recruitmentClosed === true) {
       return json(410, { success: false, error: "recruitment_closed" }, origin);
     }
 
@@ -191,6 +189,6 @@ async function insertLead(lead: LeadRecord): Promise<InsertResult> {
 if (import.meta.main) {
   Deno.serve(createEcoLeadHandler({
     insertLead,
-    recruitmentEndAt: Deno.env.get("ECO_RECRUITMENT_END_AT"),
+    recruitmentClosed: Deno.env.get("ECO_RECRUITMENT_CLOSED")?.trim().toLowerCase() === "true",
   }));
 }

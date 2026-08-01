@@ -1,10 +1,11 @@
-export const DELIVERY_REFERENCE_PATTERN = /^[A-Za-z0-9_-]{16,200}$/;
+export {
+  DELIVERY_REFERENCE_MAX_LENGTH,
+  DELIVERY_REFERENCE_MIN_LENGTH,
+  DELIVERY_REFERENCE_PATTERN,
+  normalizeDeliveryReference,
+} from "../../../lib/eco/delivery-reference.mjs";
 
-export function normalizeDeliveryReference(value) {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim();
-  return DELIVERY_REFERENCE_PATTERN.test(normalized) ? normalized : null;
-}
+import { normalizeDeliveryReference } from "../../../lib/eco/delivery-reference.mjs";
 
 export function buildCaseAnswerPath(deliveryReference) {
   const normalized = normalizeDeliveryReference(deliveryReference);

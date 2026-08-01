@@ -5,7 +5,6 @@ import {
 import {
   buildDeliveryEmailContent,
   buildDeliveryUrl,
-  buildEcoEmblemUrl,
   createDeliveryPreparationHandler,
   createPostmarkSender,
   createSupabaseDeliveryPreparation,
@@ -800,10 +799,10 @@ Deno.test("email applies the ECO identity and Aspirante presentation safely", ()
     participantName: "  João   da Silva <script>alert('x')</script>  ",
     deliveryUrl:
       `https://liberula.com/eco/eco-sp-001/iniciar/?delivery=${REFERENCE_A}`,
-  }, "https://liberula.com/");
+  });
   assertEquals(
     named.subject,
-    "E.C.O. | Acesso autorizado ao Caso ECO-SP-001",
+    "E.C.O. — Caso ECO-SP-001 disponível",
   );
   assertEquals(
     named.preheader,
@@ -812,11 +811,10 @@ Deno.test("email applies the ECO identity and Aspirante presentation safely", ()
   for (
     const text of [
       "E.C.O.",
-      "ENCONTRAR. CONTER. OCULTAR.",
-      "TRANSMISSÃO AUTORIZADA",
-      "CLASSIFICAÇÃO: RESTRITO",
+      "Encontrar. Conter. Ocultar.",
+      "TRANSMISSÃO ECO-SP-001",
       "ASPIRANTE:",
-      "MATERIAL DE AVALIAÇÃO DISPONÍVEL",
+      "Seu primeiro caso está disponível.",
       "ACESSAR CASO",
     ]
   ) {
@@ -836,9 +834,8 @@ Deno.test("email applies the ECO identity and Aspirante presentation safely", ()
   assert(!named.htmlBody.includes("<SCRIPT>"));
   assert(named.textBody.includes(REFERENCE_A));
   assert(named.htmlBody.includes(REFERENCE_A));
-  assert(named.htmlBody.includes("https://liberula.com/eco/eco-emblem.webp"));
-  assert(named.htmlBody.includes('alt="Emblema da E.C.O."'));
-  assert(named.htmlBody.includes('width="64" height="64"'));
+  assert(!named.htmlBody.includes("eco-emblem.webp"));
+  assert(!named.htmlBody.includes("<img"));
   assert(!named.htmlBody.includes("<script"));
   assert(!named.htmlBody.includes("data:image"));
   assert(!named.htmlBody.includes("<link"));
@@ -856,9 +853,10 @@ Deno.test("email applies the ECO identity and Aspirante presentation safely", ()
     recipientEmail: "controlled@example.test",
     participantName: null,
     deliveryUrl: "https://liberula.com/case?delivery=opaque-reference-1234",
-  }, "https://liberula.com");
-  assert(generic.textBody.includes("ASPIRANTE: IDENTIDADE NÃO REGISTRADA"));
-  assert(generic.htmlBody.includes("ASPIRANTE: IDENTIDADE NÃO REGISTRADA"));
+  });
+  assert(generic.textBody.includes("\nASPIRANTE\n"));
+  assert(generic.htmlBody.includes(">ASPIRANTE<"));
+  assert(!generic.textBody.includes("IDENTIDADE NÃO REGISTRADA"));
 
   const bounded = buildDeliveryEmailContent({
     deliveryId: DELIVERY_A,
@@ -866,18 +864,9 @@ Deno.test("email applies the ECO identity and Aspirante presentation safely", ()
     recipientEmail: "controlled@example.test",
     participantName: "á".repeat(81),
     deliveryUrl: `https://liberula.com/case?delivery=${REFERENCE_A}`,
-  }, "https://liberula.com");
+  });
   assert(bounded.textBody.includes(`ASPIRANTE: ${"Á".repeat(80)}\n`));
   assert(!bounded.textBody.includes("Á".repeat(81)));
-});
-
-Deno.test("emblem URL is absolute HTTPS and built only from the public base", () => {
-  assertEquals(
-    buildEcoEmblemUrl("https://liberula.com/"),
-    "https://liberula.com/eco/eco-emblem.webp",
-  );
-  assertEquals(buildEcoEmblemUrl("http://liberula.com"), null);
-  assertEquals(buildEcoEmblemUrl("/eco"), null);
 });
 
 Deno.test("Postmark sender uses only configured transactional fields and safe metadata", async () => {

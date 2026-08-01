@@ -10,12 +10,6 @@ import {
   submitEcoLead,
 } from "./lead";
 import {
-  ECO_RECRUITMENT_END_LABEL,
-  getEcoCountdown,
-  isEcoRecruitmentClosed,
-  type EcoCountdown,
-} from "./deadline";
-import {
   trackEcoClosedView,
   trackEcoCtaClick,
   trackEcoEmailSubmitted,
@@ -60,7 +54,6 @@ export default function EcoLanding() {
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [submitError, setSubmitError] = useState("");
   const [isClosed, setIsClosed] = useState(false);
-  const [countdown, setCountdown] = useState<EcoCountdown | null>(null);
 
   useEffect(() => {
     const referralCode = normalizeReferralCode(
@@ -91,16 +84,6 @@ export default function EcoLanding() {
     const attribution = readEcoAttribution();
     trackEcoLandingView(attribution);
 
-    function refreshDeadline() {
-      const closed = isEcoRecruitmentClosed();
-      setIsClosed(closed);
-      setCountdown(closed ? { days: 0, hours: 0, minutes: 0 } : getEcoCountdown());
-      if (closed) trackEcoClosedView();
-    }
-
-    refreshDeadline();
-    const interval = window.setInterval(refreshDeadline, 1_000);
-    return () => window.clearInterval(interval);
   }, []);
 
   function scrollToForm() {
@@ -117,12 +100,6 @@ export default function EcoLanding() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submittingRef.current || submitState === "success" || submitState === "duplicate") return;
-    if (isEcoRecruitmentClosed()) {
-      setIsClosed(true);
-      trackEcoClosedView();
-      return;
-    }
-
     const form = event.currentTarget;
     const formData = new FormData(form);
     const name = String(formData.get("name") ?? "").trim();
@@ -165,6 +142,11 @@ export default function EcoLanding() {
       form.reset();
     } catch (error) {
       const errorKind = error instanceof EcoLeadSubmissionError ? error.kind : "submission";
+      if (errorKind === "closed") {
+        setIsClosed(true);
+        trackEcoClosedView();
+        return;
+      }
       setSubmitState("error");
       setSubmitError(
         errorKind === "configuration" && process.env.NODE_ENV !== "production"
@@ -199,17 +181,6 @@ export default function EcoLanding() {
             <p className={styles.heroText}>Participe gratuitamente da primeira etapa do processo de admissão da E.C.O. Analise os documentos, siga as instruções e descubra se sua candidatura será aceita.</p>
             <button className={styles.primaryButton} type="button" onClick={scrollToForm}>INICIAR RECRUTAMENTO <FiArrowRight aria-hidden="true" /></button>
             <p className={styles.microcopy}>Nenhum pagamento será solicitado nesta etapa.</p>
-            {ECO_RECRUITMENT_END_LABEL && (
-              <div className={styles.heroDeadline}>
-                <span>Esta janela de recrutamento será encerrada em:</span>
-                <strong aria-live="off">
-                  {countdown
-                    ? `${countdown.days} dias ${countdown.hours} horas ${countdown.minutes} minutos`
-                    : "Prazo em atualização"}
-                </strong>
-                <time>{`Inscrições abertas até ${ECO_RECRUITMENT_END_LABEL}.`}</time>
-              </div>
-            )}
           </div>
           <div className={styles.heroVisual}>
             <Image src="/eco/hero-dossier.webp" width={1448} height={1086} priority sizes="(max-width: 767px) 110vw, 62vw" alt="Envelope e documentos confidenciais da E.C.O." />
@@ -248,10 +219,6 @@ export default function EcoLanding() {
             <Eyebrow>REGISTRO CONFIDENCIAL</Eyebrow>
             <h2 id="registrar-candidatura">Registrar candidatura</h2>
             <p>A primeira etapa acontece online e é gratuita. Se sua candidatura avançar, as próximas instruções serão enviadas por e-mail.</p>
-            <div className={styles.deadlineNotice}>
-              Esta janela de recrutamento ficará aberta por tempo limitado.
-              {ECO_RECRUITMENT_END_LABEL && <strong>{` Inscrições abertas até ${ECO_RECRUITMENT_END_LABEL}.`}</strong>}
-            </div>
           </div>
 
           <div className={styles.formPanel}>

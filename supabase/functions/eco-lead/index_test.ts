@@ -83,6 +83,29 @@ Deno.test("honeypot returns generic success without inserting", async () => {
   assert(inserts === 0, "honeypot submission was inserted");
 });
 
+Deno.test("closed recruitment rejects valid submissions without inserting", async () => {
+  let inserts = 0;
+  const handler = createEcoLeadHandler({
+    insertLead: async () => { inserts += 1; return "created"; },
+    recruitmentClosed: true,
+  });
+  const response = await handler(request());
+  const body = await response.json();
+  assert(response.status === 410, "expected 410");
+  assert(body.error === "recruitment_closed", "expected recruitment_closed error");
+  assert(inserts === 0, "closed recruitment should not insert");
+});
+
+Deno.test("recruitment remains open when the restriction is false or absent", async () => {
+  const openHandler = createEcoLeadHandler({
+    insertLead: async () => "created",
+    recruitmentClosed: false,
+  });
+  const defaultHandler = createEcoLeadHandler({ insertLead: async () => "created" });
+  assert((await openHandler(request())).status === 200, "false should keep recruitment open");
+  assert((await defaultHandler(request())).status === 200, "missing flag should keep recruitment open");
+});
+
 Deno.test("oversized and incorrectly typed fields are rejected", async () => {
   const handler = createEcoLeadHandler({ insertLead: async () => "created" });
   assert((await handler(request("POST", { ...validPayload, utm_source: "x".repeat(256) }))).status === 400, "oversized UTM should fail");

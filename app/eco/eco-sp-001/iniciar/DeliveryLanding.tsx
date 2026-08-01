@@ -8,6 +8,11 @@ import {
   buildCaseAnswerPath,
   normalizeDeliveryReference,
 } from "../delivery-reference.mjs";
+import {
+  buildDeliveryOpenEndpoint,
+  isTrackableDeliveryLandingHostname,
+  sendDeliveryOpen,
+} from "../delivery-open-tracking.mjs";
 import styles from "./DeliveryLanding.module.css";
 
 const DOSSIER_PATH = "/eco/eco-sp-001/eco-sp-001-atalho.pdf";
@@ -24,6 +29,7 @@ function readDeliveryReference() {
 
 export default function DeliveryActions() {
   const viewCapturedRef = useRef(false);
+  const openTrackingStartedRef = useRef(false);
   const [deliveryReference, setDeliveryReference] = useState<string | null>(
     null,
   );
@@ -32,12 +38,47 @@ export default function DeliveryActions() {
     const reference = readDeliveryReference();
     setDeliveryReference(reference);
 
-    if (viewCapturedRef.current) return;
-    viewCapturedRef.current = true;
-    safePosthogCapture("eco_case_delivery_landing_viewed", {
-      ...EVENT_PROPERTIES,
-      ...(reference ? { delivery_reference: reference } : {}),
-    });
+    if (!viewCapturedRef.current) {
+      viewCapturedRef.current = true;
+      safePosthogCapture("eco_case_delivery_landing_viewed", {
+        ...EVENT_PROPERTIES,
+        ...(reference ? { delivery_reference: reference } : {}),
+      });
+    }
+
+    const endpoint = buildDeliveryOpenEndpoint(
+      process.env.NEXT_PUBLIC_LIBERULA_SUPABASE_URL,
+    );
+    if (
+      !reference || !endpoint ||
+      !isTrackableDeliveryLandingHostname(window.location.hostname)
+    ) return;
+
+    const sendOnce = () => {
+      if (openTrackingStartedRef.current) return;
+      openTrackingStartedRef.current = true;
+      void sendDeliveryOpen(endpoint, reference).catch(() => {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("Delivery open tracking failed.");
+        }
+      });
+    };
+
+    if (document.visibilityState === "visible") {
+      sendOnce();
+      return;
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      sendOnce();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener(
+      "visibilitychange",
+      onVisibilityChange,
+    );
   }, []);
 
   function trackDossierOpen() {

@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import {
-  DELIVERY_REFERENCE_PATTERN,
   genericResponse,
   isLocalDevelopmentRequest,
   isPlainObject,
@@ -16,19 +15,17 @@ type ApprovedParticipant = {
   email: string;
   status: string;
   registered_at: string;
-  delivery_id: string | null;
   delivery_status: string | null;
-  delivery_reference: string | null;
   sent_at: string | null;
+  opened_at: string | null;
   attempt_count: number | null;
   last_error_code: string | null;
 };
 
 type ApprovedDelivery = {
-  id: string;
   status: string;
-  delivery_reference: string;
   sent_at: string | null;
+  opened_at: string | null;
   attempt_count: number;
   last_error_code: string | null;
 };
@@ -65,10 +62,9 @@ function parseParticipant(
   value: unknown,
 ): Omit<
   ApprovedParticipant,
-  | "delivery_id"
   | "delivery_status"
-  | "delivery_reference"
   | "sent_at"
+  | "opened_at"
   | "attempt_count"
   | "last_error_code"
 > | null {
@@ -92,25 +88,23 @@ function parseParticipant(
 
 function parseDelivery(value: unknown): (ApprovedDelivery & { participant_id: string }) | null {
   if (
-    !isPlainObject(value) || typeof value.id !== "string" ||
-    typeof value.participant_id !== "string" ||
-    !UUID_PATTERN.test(value.id) || !UUID_PATTERN.test(value.participant_id) ||
+    !isPlainObject(value) || typeof value.participant_id !== "string" ||
+    !UUID_PATTERN.test(value.participant_id) ||
     typeof value.status !== "string" || !DELIVERY_STATUSES.has(value.status) ||
-    typeof value.delivery_reference !== "string" ||
-    !DELIVERY_REFERENCE_PATTERN.test(value.delivery_reference) ||
     (value.sent_at !== null &&
       (typeof value.sent_at !== "string" || !Number.isFinite(Date.parse(value.sent_at)))) ||
+    (value.opened_at !== null &&
+      (typeof value.opened_at !== "string" || !Number.isFinite(Date.parse(value.opened_at)))) ||
     typeof value.attempt_count !== "number" ||
     !Number.isInteger(value.attempt_count) || value.attempt_count < 0 ||
     (value.last_error_code !== null &&
       (typeof value.last_error_code !== "string" || !SAFE_ERROR_CODES.has(value.last_error_code)))
   ) return null;
   return {
-    id: value.id,
     participant_id: value.participant_id,
     status: value.status,
-    delivery_reference: value.delivery_reference,
     sent_at: value.sent_at,
+    opened_at: value.opened_at,
     attempt_count: value.attempt_count,
     last_error_code: value.last_error_code,
   };
@@ -149,7 +143,7 @@ export async function POST(request: NextRequest) {
       const deliveryUrl = new URL("/rest/v1/eco_case_deliveries", configuration.supabaseUrl);
       deliveryUrl.searchParams.set(
         "select",
-        "id,participant_id,status,delivery_reference,sent_at,attempt_count,last_error_code",
+        "participant_id,status,sent_at,opened_at,attempt_count,last_error_code",
       );
       deliveryUrl.searchParams.set("case_id", "eq.eco-sp-001");
       deliveryUrl.searchParams.set("participant_id", `in.(${participantIds.join(",")})`);
@@ -178,10 +172,9 @@ export async function POST(request: NextRequest) {
       const delivery = deliveries.get(participant!.id);
       return {
         ...participant!,
-        delivery_id: delivery?.id ?? null,
         delivery_status: delivery?.status ?? null,
-        delivery_reference: delivery?.delivery_reference ?? null,
         sent_at: delivery?.sent_at ?? null,
+        opened_at: delivery?.opened_at ?? null,
         attempt_count: delivery?.attempt_count ?? null,
         last_error_code: delivery?.last_error_code ?? null,
       };

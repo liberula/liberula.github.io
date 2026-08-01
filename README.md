@@ -39,15 +39,14 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/deploym
 
 A rota `/eco` é uma landing gratuita de recrutamento e permanece compatível com o
 export estático do GitHub Pages. O formulário envia JSON à Edge Function pública
-`lead-submit`, que valida e grava o lead no Supabase sem expor credenciais no navegador.
+`eco-lead`, que valida e grava o lead no Supabase sem expor credenciais no navegador.
 O payload inclui projeto, funil, nome, e-mail, consentimento, UTMs, `fbclid`, URL,
 referrer, metadata e um honeypot de proteção mínima contra spam.
 
 ### Variáveis de ambiente
 
 ```env
-NEXT_PUBLIC_ECO_FORM_ENDPOINT=https://PROJECT_REF.supabase.co/functions/v1/lead-submit
-NEXT_PUBLIC_ECO_RECRUITMENT_END_AT=2026-07-24T23:59:59-03:00
+NEXT_PUBLIC_ECO_FORM_ENDPOINT=https://PROJECT_REF.supabase.co/functions/v1/eco-lead
 NEXT_PUBLIC_META_PIXEL_ID=
 NEXT_PUBLIC_POSTHOG_KEY=
 NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
@@ -58,9 +57,8 @@ Variables**. Todas são públicas e incorporadas no build; não use tokens ou
 credenciais nelas. `NEXT_PUBLIC_ECO_FORM_ENDPOINT` é obrigatória no workflow.
 
 Não há fallback automático entre receptores, evitando cadastros duplicados. Para
-rollback, restaure somente a URL da Edge Function `eco-lead` nessa variável e faça
-um novo deploy da landing. Tanto o receptor genérico quanto o legado confirmam o
-cadastro com JSON `success: true`.
+rollback, restaure a URL anterior nessa variável e faça um novo deploy da landing.
+O receptor confirma o cadastro com JSON `success: true`.
 
 ### Supabase: migration e Edge Function
 
@@ -69,10 +67,6 @@ Os arquivos estão em:
 - `supabase/migrations/20260717000000_create_eco_leads.sql`
 - `supabase/functions/eco-lead/index.ts`
 - `supabase/functions/eco-lead/index_test.ts`
-- `supabase/migrations/20260717010000_create_leads.sql`
-- `supabase/migrations/20260717020000_allow_eco_leads.sql`
-- `supabase/functions/lead-submit/index.ts`
-- `supabase/functions/lead-submit/index_test.ts`
 
 A migration cria `public.eco_leads`, o índice único case-insensitive de e-mail,
 habilita RLS, revoga acesso de `anon` e `authenticated` e não cria policy pública.
@@ -85,8 +79,8 @@ Com o Supabase CLI autenticado e o projeto vinculado:
 ```bash
 supabase link --project-ref PROJECT_REF
 supabase db push
-supabase functions deploy lead-submit --no-verify-jwt
-deno test supabase/functions/lead-submit/index_test.ts
+supabase functions deploy eco-lead --no-verify-jwt
+deno test supabase/functions/eco-lead/index_test.ts
 ```
 
 O `supabase/config.toml` também registra `verify_jwt = false`, pois a função é pública.
@@ -97,13 +91,13 @@ qualquer porta. Alterações de domínio exigem atualizar a allowlist da funçã
 Após o deploy, a URL final é:
 
 ```text
-https://PROJECT_REF.supabase.co/functions/v1/lead-submit
+https://PROJECT_REF.supabase.co/functions/v1/eco-lead
 ```
 
 Teste a produção (use um e-mail descartável de QA e repita para validar deduplicação):
 
 ```bash
-curl -i 'https://PROJECT_REF.supabase.co/functions/v1/lead-submit' \
+curl -i 'https://PROJECT_REF.supabase.co/functions/v1/eco-lead' \
   -X POST \
   -H 'Origin: https://liberula.com' \
   -H 'Content-Type: application/json' \
@@ -118,15 +112,20 @@ GitHub Actions. Depois do deploy da landing, confirme no navegador que o evento 
 
 ### Janela de recrutamento
 
-`NEXT_PUBLIC_ECO_RECRUITMENT_END_AT` define uma data ISO fixa, com timezone, igual
-para todos os visitantes. A página mostra a data por escrito, atualiza o contador
-no navegador e fecha o formulário quando o relógio local alcança o prazo. A data
-não é criada nem armazenada por visitante.
+O bloqueio é controlado somente no backend pela variável `ECO_RECRUITMENT_CLOSED`.
+Configure-a como secret da Edge Function com o valor `true` para rejeitar novas
+candidaturas E.C.O. com HTTP 410, ou `false` para aceitá-las. Se a variável estiver
+ausente ou tiver qualquer outro valor, o recrutamento permanece aberto. A restrição
+é aplicada pela função `eco-lead`.
 
-Se a variável estiver ausente ou inválida, a landing permanece aberta, oculta o
-contador e registra um aviso somente em desenvolvimento. Como o site é exportado
-estaticamente, o bloqueio de prazo no navegador não substitui uma validação no
-receptor caso seja necessário impedir requisições feitas fora da interface.
+```bash
+supabase secrets set ECO_RECRUITMENT_CLOSED=true
+supabase functions deploy eco-lead --no-verify-jwt
+```
+
+A landing não contém data, contador ou bloqueio baseado no relógio do navegador.
+Quando o backend responde que o recrutamento está fechado, o formulário é substituído
+pelo aviso de fase encerrada.
 
 Respostas que indiquem duplicidade (`duplicate: true`, código/mensagem `duplicate`
 ou equivalente) são mostradas como sucesso, sem registrar um novo evento de lead.
@@ -142,6 +141,6 @@ serviço.
    `eco_recruitment_landing_view`, `eco_recruitment_cta_click`,
    `eco_recruitment_form_started`, `eco_recruitment_form_error` e
    `eco_recruitment_email_submitted`.
-5. Configure uma data alguns minutos no futuro, aguarde o prazo e confirme
-   `eco_recruitment_closed_view` e a remoção automática do formulário.
+5. Configure `ECO_RECRUITMENT_CLOSED=true` na Edge Function e confirme a resposta
+   HTTP 410, o evento `eco_recruitment_closed_view` e a substituição do formulário.
 6. Execute `npm run lint` e `npm run build` antes de publicar.

@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   filterParticipants,
-  getDeliveryUrl,
+  getOpeningState,
+  getOperatorStatus,
+  getSendActionLabel,
   isLocalOperatorHostname,
   isSendEligible,
   toggleParticipantSelection,
@@ -16,38 +18,50 @@ type Participant = {
   email: string;
   status: "registered" | "active" | "paused" | "completed" | "blocked";
   registered_at: string;
-  delivery_id: string | null;
   delivery_status: "pending" | "sending" | "sent" | "failed" | "cancelled" | null;
-  delivery_reference: string | null;
   sent_at: string | null;
+  opened_at: string | null;
   attempt_count: number | null;
   last_error_code: string | null;
 };
 
 type OperationResult = {
-  participant_id?: string;
-  delivery_id: string;
-  result: string;
-  status?: string;
+  participant_id: string;
+  result: "sent" | "failed" | "already_sent" | "blocked" | "not_found" | "retry_limit_reached";
   error?: string;
-  delivery_url?: string;
 };
 
-const PARTICIPANT_STATUS_LABELS: Record<string, string> = {
-  registered: "Registrado",
-  active: "Ativo",
-  paused: "Pausado",
-  completed: "Concluído",
-  blocked: "Bloqueado",
+type Preview = {
+  subject: string;
+  preheader: string;
+  htmlBody: string;
+  textBody: string;
+  example: boolean;
 };
 
-const DELIVERY_STATUS_LABELS: Record<string, string> = {
-  not_prepared: "Não preparada",
-  pending: "Pendente",
-  sending: "Em envio",
-  sent: "Enviada",
-  failed: "Falhou",
-  cancelled: "Cancelada",
+type PreviewMode = "desktop" | "mobile" | "text";
+
+const STATUS_LABELS: Record<string, string> = {
+  not_sent: "NÃO ENVIADO",
+  sending: "ENVIANDO",
+  sent: "ENVIADO",
+  failed: "FALHOU",
+  blocked: "BLOQUEADO",
+};
+
+const RESULT_LABELS: Record<string, string> = {
+  sent: "ENVIADO",
+  failed: "FALHOU",
+  already_sent: "JÁ ENVIADO",
+  blocked: "BLOQUEADO",
+  not_found: "NÃO ENCONTRADO",
+  retry_limit_reached: "LIMITE DE TENTATIVAS",
+};
+
+const OPENING_LABELS: Record<string, string> = {
+  not_applicable: "—",
+  unopened: "NÃO ABRIU",
+  opened: "ABRIU",
 };
 
 const ERROR_LABELS: Record<string, string> = {
@@ -55,8 +69,8 @@ const ERROR_LABELS: Record<string, string> = {
   unauthorized: "Operação local não autorizada.",
   request_failed: "A solicitação local é inválida.",
   participant_query_failed: "Não foi possível consultar os participantes.",
-  prepare_failed: "A preparação não pôde ser concluída.",
   send_failed: "O envio não pôde ser concluído.",
+  preview_failed: "A pré-visualização não pôde ser gerada.",
   invalid_response: "O serviço retornou uma resposta inválida.",
   postmark_configuration_missing: "Configuração do Postmark ausente.",
   postmark_timeout: "O Postmark não respondeu dentro do limite.",
@@ -69,12 +83,11 @@ const ERROR_LABELS: Record<string, string> = {
   participant_ineligible: "Participante inelegível para envio.",
   case_inactive: "O caso não está ativo.",
   retry_limit_reached: "Limite de tentativas atingido.",
+  internal_error: "Falha operacional interna.",
 };
 
 function safeErrorLabel(value: unknown, fallback: string) {
-  return typeof value === "string" && ERROR_LABELS[value]
-    ? ERROR_LABELS[value]
-    : fallback;
+  return typeof value === "string" && ERROR_LABELS[value] ? ERROR_LABELS[value] : fallback;
 }
 
 function formatDate(value: string | null) {
@@ -90,13 +103,13 @@ export default function EcoDeliveryPanel() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [participantStatus, setParticipantStatus] = useState("");
-  const [deliveryStatus, setDeliveryStatus] = useState("");
-  const [onlyWithoutDelivery, setOnlyWithoutDelivery] = useState(false);
+  const [operatorStatus, setOperatorStatus] = useState("");
   const [testEmail, setTestEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [results, setResults] = useState<OperationResult[]>([]);
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("desktop");
 
   useEffect(() => {
     setLocalAccess(isLocalOperatorHostname(window.location.hostname));
@@ -118,10 +131,12 @@ export default function EcoDeliveryPanel() {
         return;
       }
       setParticipants(payload.participants);
-      const availableIds = new Set(payload.participants.map((item: Participant) => item.id));
-      setSelectedIds((current) =>
-        new Set(Array.from(current).filter((id) => availableIds.has(id)))
+      const eligibleIds = new Set(
+        payload.participants
+          .filter((item: Participant) => isSendEligible(item))
+          .map((item: Participant) => item.id),
       );
+      setSelectedIds((current) => new Set(Array.from(current).filter((id) => eligibleIds.has(id))));
     } catch {
       setNotice("Não foi possível atualizar os participantes.");
     } finally {
@@ -135,16 +150,29 @@ export default function EcoDeliveryPanel() {
 
   const filtered = useMemo(() => filterParticipants(participants, {
     search,
-    participantStatus,
-    deliveryStatus,
-    onlyWithoutDelivery,
-  }) as Participant[], [participants, search, participantStatus, deliveryStatus, onlyWithoutDelivery]);
+    operatorStatus,
+  }) as Participant[], [participants, search, operatorStatus]);
+
+  const selectedParticipants = useMemo(
+    () => participants.filter((participant) => selectedIds.has(participant.id)),
+    [participants, selectedIds],
+  );
 
   if (!localAccess) {
     return <main><p>Painel administrativo indisponível neste ambiente.</p></main>;
   }
 
-  async function runOperation(body: Record<string, unknown>) {
+  async function sendParticipants(recipients: Participant[]) {
+    if (recipients.length < 1) {
+      setNotice("Selecione pelo menos um participante elegível.");
+      return;
+    }
+    const retrying = recipients.every((participant) => participant.delivery_status === "failed");
+    const recipientList = recipients.map((participant) => `• ${participant.email}`).join("\n");
+    if (!window.confirm(
+      `${retrying ? "Você está prestes a tentar novamente" : "Você está prestes a enviar"} ${recipients.length} e-mail(s) reais pelo Postmark.\n\nDestinatários:\n${recipientList}\n\nConfirme para continuar.`,
+    )) return;
+
     setLoading(true);
     setNotice("");
     setResults([]);
@@ -152,72 +180,61 @@ export default function EcoDeliveryPanel() {
       const response = await fetch("/api/internal/eco/deliveries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          action: "send_participants",
+          case_id: "eco-sp-001",
+          participant_ids: recipients.map((participant) => participant.id),
+        }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || payload?.success !== true || !Array.isArray(payload.results)) {
-        setNotice(safeErrorLabel(payload?.error, "A operação não pôde ser concluída."));
+        setNotice(safeErrorLabel(payload?.error, "O envio não pôde ser concluído."));
         return;
       }
       setResults(payload.results);
-      setNotice("Operação concluída. Os registros foram atualizados.");
+      setNotice("Operação concluída. Confira o resultado por participante.");
       await refreshParticipants();
     } catch {
-      setNotice("A operação não pôde ser concluída.");
+      setNotice("O envio não pôde ser concluído.");
     } finally {
       setLoading(false);
     }
   }
 
-  function confirmPrepare(participantIds: string[]) {
-    if (participantIds.length < 1) {
-      setNotice("Selecione pelo menos um participante.");
+  function previewUrl(format?: "html") {
+    const params = new URLSearchParams();
+    if (selectedParticipants.length === 1) {
+      params.set("participant_id", selectedParticipants[0].id);
+    }
+    if (format) params.set("format", format);
+    return `/api/internal/eco/delivery-preview${params.size ? `?${params}` : ""}`;
+  }
+
+  async function openPreview() {
+    if (selectedParticipants.length > 1) {
+      setNotice("Para pré-visualizar, selecione exatamente um participante ou remova toda a seleção para usar o exemplo.");
       return;
     }
-    if (!window.confirm(
-      `Preparar delivery do caso eco-sp-001 para ${participantIds.length} participante(s)?\n\nEsta ação não envia e-mail.`,
-    )) return;
-    void runOperation({
-      action: "prepare",
-      case_id: "eco-sp-001",
-      participant_ids: participantIds,
-    });
-  }
-
-  function confirmSend(deliveryIds: string[]) {
-    if (deliveryIds.length < 1) {
-      setNotice("Nenhuma delivery elegível foi selecionada. Entregas ausentes não serão preparadas automaticamente.");
-      return;
-    }
-    if (!window.confirm(
-      `Você está prestes a enviar ${deliveryIds.length} e-mail(s) reais pelo Postmark.\nEsta ação não é uma pré-visualização.`,
-    )) return;
-    void runOperation({ action: "send", delivery_ids: deliveryIds });
-  }
-
-  function sendSelected() {
-    const deliveryIds = participants
-      .filter((participant) => selectedIds.has(participant.id) && isSendEligible(participant))
-      .map((participant) => participant.delivery_id)
-      .filter((id): id is string => Boolean(id));
-    confirmSend(deliveryIds);
-  }
-
-  async function copyLink(participant: Participant) {
-    const url = getDeliveryUrl(participant);
-    if (!url) return setNotice("Esta delivery não possui um link válido.");
+    setLoading(true);
+    setNotice("");
     try {
-      await navigator.clipboard.writeText(url);
-      setNotice("Link individual copiado.");
+      const response = await fetch(previewUrl(), { cache: "no-store" });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success !== true || typeof payload.htmlBody !== "string") {
+        setNotice(safeErrorLabel(payload?.error, "A pré-visualização não pôde ser gerada."));
+        return;
+      }
+      setPreview(payload);
+      setPreviewMode("desktop");
     } catch {
-      setNotice("Não foi possível copiar o link. Use Abrir landing.");
+      setNotice("A pré-visualização não pôde ser gerada.");
+    } finally {
+      setLoading(false);
     }
   }
 
-  function openLanding(participant: Participant) {
-    const url = getDeliveryUrl(participant);
-    if (!url) return setNotice("Esta delivery não possui um link válido.");
-    const opened = window.open(url, "_blank", "noopener,noreferrer");
+  function openPreviewInNewTab() {
+    const opened = window.open(previewUrl("html"), "_blank", "noopener,noreferrer");
     if (opened) opened.opener = null;
   }
 
@@ -227,12 +244,26 @@ export default function EcoDeliveryPanel() {
     if (next.limitReached) setNotice("O limite é de 10 participantes por operação.");
   }
 
+  function openAccess(participant: Participant) {
+    if (participant.delivery_status !== "sent") return;
+    if (!window.confirm(
+      "Abrir este acesso real registrará a primeira abertura da landing. Deseja continuar?",
+    )) return;
+    const params = new URLSearchParams({ participant_id: participant.id });
+    const opened = window.open(
+      `/api/internal/eco/delivery-access?${params}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    if (opened) opened.opener = null;
+  }
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>
         <p className={styles.eyebrow}>AMBIENTE LOCAL</p>
-        <h1>E.C.O. — OPERAÇÕES DE ENTREGA</h1>
-        <p>Ferramenta local para preparação e envio manual do Caso ECO-SP-001.</p>
+        <h1>E.C.O. — ENVIO DE E-MAILS</h1>
+        <p>Selecione participantes, confira a mensagem e envie o Caso ECO-SP-001.</p>
       </header>
 
       <div className={styles.warning} role="alert">
@@ -266,54 +297,41 @@ export default function EcoDeliveryPanel() {
             <input value={search} onChange={(event) => setSearch(event.target.value)} type="search" />
           </label>
           <label>
-            Status do participante
-            <select value={participantStatus} onChange={(event) => setParticipantStatus(event.target.value)}>
+            Status
+            <select value={operatorStatus} onChange={(event) => setOperatorStatus(event.target.value)}>
               <option value="">Todos</option>
-              {Object.entries(PARTICIPANT_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
-          </label>
-          <label>
-            Status da delivery
-            <select value={deliveryStatus} onChange={(event) => setDeliveryStatus(event.target.value)}>
-              <option value="">Todas</option>
-              {Object.entries(DELIVERY_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </label>
-          <label className={styles.checkboxLabel}>
-            <input type="checkbox" checked={onlyWithoutDelivery} onChange={(event) => setOnlyWithoutDelivery(event.target.checked)} />
-            Apenas participantes sem delivery
           </label>
         </div>
 
         <div className={styles.batchActions}>
-          <button type="button" onClick={() => confirmPrepare(Array.from(selectedIds))} disabled={loading || selectedIds.size === 0}>PREPARAR DELIVERY</button>
-          <button className={styles.dangerButton} type="button" onClick={sendSelected} disabled={loading || selectedIds.size === 0}>ENVIAR E-MAIL REAL</button>
+          <button type="button" onClick={() => void openPreview()} disabled={loading || selectedIds.size > 1}>PRÉ-VISUALIZAR E-MAIL</button>
+          <button className={styles.dangerButton} type="button" onClick={() => void sendParticipants(selectedParticipants)} disabled={loading || selectedIds.size === 0}>ENVIAR E-MAIL</button>
         </div>
 
         {notice && <p className={styles.notice} role="status">{notice}</p>}
 
         <div className={styles.tableWrapper}>
           <table>
-            <thead><tr><th scope="col">Selecionar</th><th scope="col">Participante</th><th scope="col">Status</th><th scope="col">Delivery</th><th scope="col">Tentativas</th><th scope="col">Registro</th><th scope="col">Ações</th></tr></thead>
+            <thead><tr><th scope="col">Seleção</th><th scope="col">Nome</th><th scope="col">E-mail</th><th scope="col">Envio</th><th scope="col">Abertura</th><th scope="col">Último envio</th><th scope="col">Ações</th></tr></thead>
             <tbody>
               {filtered.map((participant) => {
-                const state = participant.delivery_status ?? "not_prepared";
-                const link = getDeliveryUrl(participant);
+                const status = getOperatorStatus(participant);
+                const opening = getOpeningState(participant);
+                const eligible = isSendEligible(participant);
                 return (
                   <tr key={participant.id}>
-                    <td><input aria-label={`Selecionar ${participant.email}`} type="checkbox" checked={selectedIds.has(participant.id)} disabled={!selectedIds.has(participant.id) && selectedIds.size >= 10} onChange={(event) => toggleSelection(participant.id, event.target.checked)} /></td>
-                    <td><strong>{participant.name || "Identidade não registrada"}</strong><span>{participant.email}</span></td>
-                    <td>{PARTICIPANT_STATUS_LABELS[participant.status]}</td>
-                    <td><span className={`${styles.status} ${styles[`status_${state}`]}`}>{DELIVERY_STATUS_LABELS[state]}</span></td>
-                    <td>{participant.attempt_count ?? "—"}</td>
-                    <td>{formatDate(participant.registered_at)}</td>
+                    <td><input aria-label={`Selecionar ${participant.email}`} type="checkbox" checked={selectedIds.has(participant.id)} disabled={!eligible || (!selectedIds.has(participant.id) && selectedIds.size >= 10)} onChange={(event) => toggleSelection(participant.id, event.target.checked)} /></td>
+                    <td><strong>{participant.name || "—"}</strong></td>
+                    <td>{participant.email}</td>
+                    <td><span className={`${styles.status} ${styles[`status_${status}`]}`}>{STATUS_LABELS[status]}</span></td>
+                    <td>{opening === "opened" ? `ABRIU EM ${formatDate(participant.opened_at)}` : OPENING_LABELS[opening]}</td>
+                    <td>{formatDate(participant.sent_at)}</td>
                     <td><div className={styles.rowActions}>
-                      {!participant.delivery_id && <button type="button" onClick={() => confirmPrepare([participant.id])}>Preparar</button>}
-                      {link && <button type="button" onClick={() => void copyLink(participant)}>Copiar link</button>}
-                      {link && <button type="button" onClick={() => openLanding(participant)}>ABRIR LANDING</button>}
-                      {participant.delivery_status === "pending" && <button className={styles.dangerButton} type="button" onClick={() => confirmSend([participant.delivery_id!])}>ENVIAR E-MAIL REAL</button>}
-                      {participant.delivery_status === "failed" && <button type="button" onClick={() => setNotice(safeErrorLabel(participant.last_error_code, "Falha de envio sem detalhe operacional."))}>Ver erro</button>}
-                      {participant.delivery_status === "failed" && (participant.attempt_count ?? 0) < 3 && <button className={styles.dangerButton} type="button" onClick={() => confirmSend([participant.delivery_id!])}>Tentar novamente</button>}
+                      {eligible && <button className={participant.delivery_status === "failed" ? styles.dangerButton : undefined} type="button" onClick={() => void sendParticipants([participant])}>{getSendActionLabel(participant)}</button>}
+                      {participant.delivery_status === "failed" && <button type="button" onClick={() => setNotice(safeErrorLabel(participant.last_error_code, "Falha de envio sem detalhe operacional."))}>VER ERRO</button>}
+                      {participant.delivery_status === "sent" && <button type="button" onClick={() => openAccess(participant)}>ABRIR ACESSO</button>}
                     </div></td>
                   </tr>
                 );
@@ -324,9 +342,33 @@ export default function EcoDeliveryPanel() {
         </div>
       </section>
 
+      {preview && <section className={styles.preview} aria-labelledby="preview-heading">
+        <div className={styles.sectionHeading}>
+          <div>
+            <h2 id="preview-heading">PRÉ-VISUALIZAÇÃO DO E-MAIL</h2>
+            <p>{preview.example ? "EXEMPLO — nenhuma pessoa selecionada" : preview.subject}</p>
+          </div>
+          <button type="button" onClick={() => setPreview(null)}>FECHAR</button>
+        </div>
+        <div className={styles.previewControls} role="group" aria-label="Modo de pré-visualização">
+          <button type="button" aria-pressed={previewMode === "desktop"} onClick={() => setPreviewMode("desktop")}>DESKTOP</button>
+          <button type="button" aria-pressed={previewMode === "mobile"} onClick={() => setPreviewMode("mobile")}>MOBILE</button>
+          <button type="button" aria-pressed={previewMode === "text"} onClick={() => setPreviewMode("text")}>TEXTO</button>
+          <button type="button" onClick={openPreviewInNewTab}>ABRIR EM NOVA ABA</button>
+        </div>
+        {previewMode === "text"
+          ? <pre className={styles.textPreview}>{preview.textBody}</pre>
+          : <div className={`${styles.previewFrame} ${previewMode === "mobile" ? styles.mobileFrame : styles.desktopFrame}`}>
+              <iframe title={`Pré-visualização ${previewMode}`} srcDoc={preview.htmlBody} sandbox="" />
+            </div>}
+      </section>}
+
       {results.length > 0 && <section className={styles.results} aria-labelledby="results-heading">
-        <h2 id="results-heading">RESULTADO DA OPERAÇÃO</h2>
-        <ul>{results.map((result, index) => <li key={`${result.delivery_id}-${index}`}><strong>{result.result}</strong><span>{result.status ?? "—"}</span>{result.error && <span>{safeErrorLabel(result.error, "Falha operacional.")}</span>}</li>)}</ul>
+        <h2 id="results-heading">RESULTADO DO ENVIO</h2>
+        <ul>{results.map((result) => {
+          const participant = participants.find((item) => item.id === result.participant_id);
+          return <li key={result.participant_id}><strong>{participant?.email ?? "Participante não encontrado"}</strong><span>{RESULT_LABELS[result.result] ?? "FALHOU"}</span>{result.error && <span>{safeErrorLabel(result.error, "Falha operacional.")}</span>}</li>;
+        })}</ul>
       </section>}
     </main>
   );
