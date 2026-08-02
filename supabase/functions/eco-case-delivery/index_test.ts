@@ -104,6 +104,7 @@ Deno.test("valid authenticated request returns one individual landing URL", asyn
     action: "prepare",
     caseId: "eco-sp-001",
     participantIds: [PARTICIPANT_A],
+    origin: "manual",
   });
   assertEquals(await response.json(), {
     success: true,
@@ -208,6 +209,7 @@ Deno.test("request parser trims case ID and normalizes UUID casing", () => {
       action: "prepare",
       caseId: "eco-sp-001",
       participantIds: [PARTICIPANT_A],
+      origin: "manual",
     },
   );
 });
@@ -430,7 +432,7 @@ Deno.test("Supabase adapter calls only the transactional preparation RPC", async
     participantIds: [PARTICIPANT_A],
   });
   assertEquals(fetchCalls, 1);
-  assert(capturedUrl.endsWith("/rest/v1/rpc/prepare_eco_case_deliveries"));
+  assert(capturedUrl.endsWith("/rest/v1/rpc/prepare_eco_case_deliveries_manual"));
   assertEquals(capturedBody, {
     p_case_id: "eco-sp-001",
     p_participant_ids: [PARTICIPANT_A],

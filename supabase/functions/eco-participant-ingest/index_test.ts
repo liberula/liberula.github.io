@@ -422,7 +422,10 @@ Deno.test("Supabase adapter calls only the transactional RPC", async () => {
     async (input, init) => {
       capturedUrl = String(input);
       capturedBody = JSON.parse(String(init?.body));
-      return new Response(JSON.stringify({ result: "created" }), {
+      return new Response(JSON.stringify({
+        result: "created",
+        automatic_job_enqueued: false,
+      }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
@@ -430,7 +433,11 @@ Deno.test("Supabase adapter calls only the transactional RPC", async () => {
   );
   const parsed = parseParticipantEvent(validPayload);
   assert(parsed !== null, "fixture should parse");
-  assert(await ingest(parsed) === "created", "wrong adapter result");
+  assertEquals(
+    await ingest(parsed),
+    { result: "created", automaticJobEnqueued: false },
+    "wrong adapter result",
+  );
   assert(
     capturedUrl.endsWith("/rest/v1/rpc/ingest_eco_participant_event"),
     "adapter did not call RPC",
@@ -442,4 +449,54 @@ Deno.test("Supabase adapter calls only the transactional RPC", async () => {
     "email not normalized",
   );
   assert(body.p_acquisition !== undefined, "acquisition missing");
+  assert(body.p_delivery_mode === "none", "default mode must be none");
+});
+
+Deno.test("live delivery mode can enqueue and attempts immediate dispatch", async () => {
+  const payload = { ...clone(validPayload), delivery_mode: "automatic_if_enabled" };
+  const parsed = parseParticipantEvent(payload);
+  assert(parsed?.deliveryMode === "automatic_if_enabled", "live mode missing");
+  let dispatches = 0;
+  const response = await createParticipantIngestHandler({
+    secret: SECRET,
+    ingest: async () => ({ result: "created", automaticJobEnqueued: true }),
+    dispatchPending: async () => { dispatches += 1; },
+  })(eventRequest({ payload }));
+  assert(response.status === 200, "ingestion should succeed");
+  assert(dispatches === 1, "immediate dispatch not attempted");
+});
+
+Deno.test("immediate dispatch failure does not undo durable ingestion", async () => {
+  const payload = { ...clone(validPayload), delivery_mode: "automatic_if_enabled" };
+  const response = await createParticipantIngestHandler({
+    secret: SECRET,
+    ingest: async () => ({ result: "linked", automaticJobEnqueued: true }),
+    dispatchPending: async () => {
+      throw new Error("simulated dispatcher outage");
+    },
+    logger: { error: () => undefined },
+  })(eventRequest({ payload }));
+  assert(response.status === 200, "durable ingestion must remain successful");
+  assertEquals(
+    await response.json(),
+    { success: true, result: "linked" },
+    "ingestion result changed after best-effort dispatch failure",
+  );
+});
+
+Deno.test("backfill delivery mode never dispatches and invalid modes are rejected", async () => {
+  const backfill = { ...clone(validPayload), delivery_mode: "none" };
+  let dispatches = 0;
+  const response = await createParticipantIngestHandler({
+    secret: SECRET,
+    ingest: async () => ({ result: "created", automaticJobEnqueued: false }),
+    dispatchPending: async () => { dispatches += 1; },
+  })(eventRequest({ payload: backfill }));
+  assert(response.status === 200 && dispatches === 0, "backfill dispatched");
+  const invalid = { ...clone(validPayload), delivery_mode: "always" };
+  const rejected = await createParticipantIngestHandler({
+    secret: SECRET,
+    ingest: async () => "created",
+  })(eventRequest({ payload: invalid }));
+  assert(rejected.status === 400, "invalid mode accepted");
 });

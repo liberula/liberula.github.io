@@ -106,7 +106,7 @@ test("Edge Function uses custom bearer auth and the transactional delivery RPCs"
   assert.match(config, /\[functions\.eco-case-delivery\]\s+verify_jwt = false/);
   assert.match(edgeFunction, /ECO_DELIVERY_ADMIN_SECRET/);
   assert.match(edgeFunction, /ECO_PUBLIC_BASE_URL/);
-  assert.match(edgeFunction, /\/rest\/v1\/rpc\/prepare_eco_case_deliveries/);
+  assert.match(edgeFunction, /prepare_eco_case_deliveries_(?:manual|automatic)/);
   assert.match(edgeFunction, /p_participant_ids: request\.participantIds/);
   assert.match(edgeFunction, /claim_eco_case_delivery_send/);
   assert.match(edgeFunction, /complete_eco_case_delivery_send/);

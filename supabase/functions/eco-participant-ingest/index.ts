@@ -26,6 +26,12 @@ export type ParticipantEvent = {
   project: typeof PROJECT;
   funnel: typeof FUNNEL;
   acquisition: JsonObject;
+  deliveryMode: "none" | "automatic_if_enabled";
+};
+
+export type ParticipantIngestOutcome = {
+  result: IngestionResult;
+  automaticJobEnqueued: boolean;
 };
 
 type IngestLogEntry = {
@@ -42,7 +48,10 @@ type IngestLogEntry = {
 
 export type ParticipantIngestDependencies = {
   secret?: string;
-  ingest: (event: ParticipantEvent) => Promise<IngestionResult>;
+  ingest: (
+    event: ParticipantEvent,
+  ) => Promise<IngestionResult | ParticipantIngestOutcome>;
+  dispatchPending?: () => Promise<void>;
   logger?: {
     info?: (entry: IngestLogEntry) => void;
     error?: (entry: IngestLogEntry) => void;
@@ -124,7 +133,7 @@ function isValidIsoTimestamp(value: string): boolean {
 export function parseParticipantEvent(value: unknown): ParticipantEvent | null {
   if (
     !isPlainObject(value) ||
-    !hasExactKeys(value, [
+    !hasAllowedKeys(value, [
       "event_id",
       "event_type",
       "event_version",
@@ -132,7 +141,7 @@ export function parseParticipantEvent(value: unknown): ParticipantEvent | null {
       "source",
       "participant",
       "acquisition",
-    ]) ||
+    ], ["delivery_mode"]) ||
     !isPlainObject(value.source) ||
     !hasExactKeys(value.source, ["system", "record_id"]) ||
     !isPlainObject(value.participant) ||
@@ -168,6 +177,9 @@ export function parseParticipantEvent(value: unknown): ParticipantEvent | null {
   const fbclid = optionalText(value.acquisition.fbclid, 512);
   const sourceUrl = optionalText(value.acquisition.source_url, 2048);
   const referrer = optionalText(value.acquisition.referrer, 2048);
+  const deliveryMode = value.delivery_mode === undefined
+    ? "none"
+    : value.delivery_mode;
 
   if (
     !eventId || !UUID_PATTERN.test(eventId) ||
@@ -181,6 +193,7 @@ export function parseParticipantEvent(value: unknown): ParticipantEvent | null {
     value.participant.consent !== true ||
     value.acquisition.project !== PROJECT ||
     value.acquisition.funnel !== FUNNEL ||
+    (deliveryMode !== "none" && deliveryMode !== "automatic_if_enabled") ||
     [
       utmSource,
       utmMedium,
@@ -218,6 +231,7 @@ export function parseParticipantEvent(value: unknown): ParticipantEvent | null {
       referrer: referrer ?? null,
       metadata: value.acquisition.metadata,
     },
+    deliveryMode,
   };
 }
 
@@ -323,14 +337,29 @@ export function createParticipantIngestHandler(
     }
 
     try {
-      const result = await dependencies.ingest(event);
+      const ingested = await dependencies.ingest(event);
+      const outcome: ParticipantIngestOutcome = typeof ingested === "string"
+        ? { result: ingested, automaticJobEnqueued: false }
+        : ingested;
       dependencies.logger?.info?.({
         event: "eco_participant_ingest",
         eventType: event.eventType,
         eventVersion: event.eventVersion,
-        result,
+        result: outcome.result,
       });
-      return json(200, { success: true, result });
+      if (outcome.automaticJobEnqueued && dependencies.dispatchPending) {
+        try {
+          await dependencies.dispatchPending();
+        } catch {
+          dependencies.logger?.error?.({
+            event: "eco_participant_ingest",
+            eventType: event.eventType,
+            eventVersion: event.eventVersion,
+            errorCategory: "configuration",
+          });
+        }
+      }
+      return json(200, { success: true, result: outcome.result });
     } catch {
       dependencies.logger?.error?.({
         event: "eco_participant_ingest",
@@ -348,7 +377,7 @@ export function createSupabaseParticipantIngest(
   serviceRoleKey?: string,
   fetcher: typeof fetch = fetch,
 ) {
-  return async (event: ParticipantEvent): Promise<IngestionResult> => {
+  return async (event: ParticipantEvent): Promise<ParticipantIngestOutcome> => {
     if (!supabaseUrl || !serviceRoleKey) {
       throw new Error("missing_server_configuration");
     }
@@ -374,6 +403,7 @@ export function createSupabaseParticipantIngest(
           p_project: event.project,
           p_funnel: event.funnel,
           p_acquisition: event.acquisition,
+          p_delivery_mode: event.deliveryMode,
         }),
       },
     );
@@ -381,9 +411,42 @@ export function createSupabaseParticipantIngest(
     const value = await response.json().catch(() => null) as JsonObject | null;
     if (
       !value ||
-      !["created", "linked", "duplicate"].includes(String(value.result))
+      !["created", "linked", "duplicate"].includes(String(value.result)) ||
+      typeof value.automatic_job_enqueued !== "boolean"
     ) throw new Error("invalid_ingestion_response");
-    return value.result as IngestionResult;
+    return {
+      result: value.result as IngestionResult,
+      automaticJobEnqueued: value.automatic_job_enqueued,
+    };
+  };
+}
+
+export function createBestEffortAutomaticDispatch(
+  supabaseUrl?: string,
+  adminSecret?: string,
+  fetcher: typeof fetch = fetch,
+) {
+  return async (): Promise<void> => {
+    if (!supabaseUrl || !adminSecret) throw new Error("missing_configuration");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5_000);
+    try {
+      const response = await fetcher(
+        `${supabaseUrl}/functions/v1/eco-automatic-delivery-dispatch`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${adminSecret}`,
+          },
+          body: JSON.stringify({ action: "dispatch", limit: 3 }),
+          signal: controller.signal,
+        },
+      );
+      if (!response.ok) throw new Error("automatic_dispatch_failed");
+    } finally {
+      clearTimeout(timeout);
+    }
   };
 }
 
@@ -393,6 +456,10 @@ if (import.meta.main) {
   Deno.serve(createParticipantIngestHandler({
     secret: Deno.env.get("ECO_INGEST_SECRET"),
     ingest: createSupabaseParticipantIngest(supabaseUrl, serviceRoleKey),
+    dispatchPending: createBestEffortAutomaticDispatch(
+      supabaseUrl,
+      Deno.env.get("ECO_DELIVERY_ADMIN_SECRET"),
+    ),
     logger: {
       info: (entry) => console.info(JSON.stringify(entry)),
       error: (entry) => console.error(JSON.stringify(entry)),

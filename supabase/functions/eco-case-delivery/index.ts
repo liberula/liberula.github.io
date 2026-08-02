@@ -27,9 +27,10 @@ export type PostmarkErrorCode =
   | "postmark_result_unknown";
 
 export type DeliveryPreparationRequest = {
-  action: "prepare";
+  action: "prepare" | "prepare_automatic";
   caseId: string;
   participantIds: string[];
+  origin?: "manual" | "automatic";
 };
 
 export type DeliverySendRequest = {
@@ -159,7 +160,7 @@ export function parseDeliveryPreparationRequest(
   if (
     !isPlainObject(value) ||
     !hasExactKeys(value, ["action", "case_id", "participant_ids"]) ||
-    value.action !== "prepare" ||
+    (value.action !== "prepare" && value.action !== "prepare_automatic") ||
     typeof value.case_id !== "string" ||
     !Array.isArray(value.participant_ids)
   ) return null;
@@ -183,7 +184,12 @@ export function parseDeliveryPreparationRequest(
     participantIds.push(participantId);
   }
 
-  return { action: "prepare", caseId, participantIds };
+  return {
+    action: value.action,
+    caseId,
+    participantIds,
+    origin: value.action === "prepare_automatic" ? "automatic" : "manual",
+  };
 }
 
 export function parseDeliverySendRequest(
@@ -630,8 +636,11 @@ export function createSupabaseDeliveryPreparation(
     if (!supabaseUrl || !serviceRoleKey) {
       throw new Error("missing_server_configuration");
     }
+    const rpcName = request.origin === "automatic"
+      ? "prepare_eco_case_deliveries_automatic"
+      : "prepare_eco_case_deliveries_manual";
     const response = await fetcher(
-      `${supabaseUrl}/rest/v1/rpc/prepare_eco_case_deliveries`,
+      `${supabaseUrl}/rest/v1/rpc/${rpcName}`,
       {
         method: "POST",
         headers: {

@@ -80,7 +80,7 @@ test("operator statuses hide internal preparation state", () => {
   for (const label of ["NÃO ENVIADO", "ENVIANDO", "ENVIADO", "FALHOU", "BLOQUEADO"]) {
     assert(client.includes(label));
   }
-  assert.doesNotMatch(client, />PREPARAR DELIVERY<|>Preparar<|Delivery ID|Delivery reference|Pendente|Pronta para/i);
+  assert.doesNotMatch(client, />PREPARAR DELIVERY<|>Preparar<|Delivery ID|Delivery reference|Pronta para/i);
 });
 
 test("main table contains only requested operational columns", () => {

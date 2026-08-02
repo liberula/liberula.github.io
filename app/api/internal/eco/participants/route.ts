@@ -20,12 +20,20 @@ type ApprovedParticipant = {
   opened_at: string | null;
   attempt_count: number | null;
   last_error_code: string | null;
+  delivery_origin: "manual" | "automatic" | null;
 };
 
 type ApprovedDelivery = {
   status: string;
   sent_at: string | null;
   opened_at: string | null;
+  attempt_count: number;
+  last_error_code: string | null;
+  origin: "manual" | "automatic";
+};
+
+type ApprovedAutomaticJob = {
+  status: "pending" | "processing" | "completed" | "failed" | "cancelled";
   attempt_count: number;
   last_error_code: string | null;
 };
@@ -56,6 +64,17 @@ const SAFE_ERROR_CODES = new Set([
   "participant_ineligible",
   "case_inactive",
   "retry_limit_reached",
+  "temporary_dispatch_failure",
+  "automation_disabled",
+  "already_sent",
+  "invalid_email",
+]);
+const AUTOMATIC_JOB_STATUSES = new Set([
+  "pending",
+  "processing",
+  "completed",
+  "failed",
+  "cancelled",
 ]);
 
 function parseParticipant(
@@ -67,6 +86,7 @@ function parseParticipant(
   | "opened_at"
   | "attempt_count"
   | "last_error_code"
+  | "delivery_origin"
 > | null {
   if (
     !isPlainObject(value) || typeof value.id !== "string" ||
@@ -98,13 +118,35 @@ function parseDelivery(value: unknown): (ApprovedDelivery & { participant_id: st
     typeof value.attempt_count !== "number" ||
     !Number.isInteger(value.attempt_count) || value.attempt_count < 0 ||
     (value.last_error_code !== null &&
-      (typeof value.last_error_code !== "string" || !SAFE_ERROR_CODES.has(value.last_error_code)))
+      (typeof value.last_error_code !== "string" || !SAFE_ERROR_CODES.has(value.last_error_code))) ||
+    (value.origin !== "manual" && value.origin !== "automatic")
   ) return null;
   return {
     participant_id: value.participant_id,
     status: value.status,
     sent_at: value.sent_at,
     opened_at: value.opened_at,
+    attempt_count: value.attempt_count,
+    last_error_code: value.last_error_code,
+    origin: value.origin,
+  };
+}
+
+function parseAutomaticJob(
+  value: unknown,
+): (ApprovedAutomaticJob & { participant_id: string }) | null {
+  if (
+    !isPlainObject(value) || typeof value.participant_id !== "string" ||
+    !UUID_PATTERN.test(value.participant_id) ||
+    typeof value.status !== "string" || !AUTOMATIC_JOB_STATUSES.has(value.status) ||
+    typeof value.attempt_count !== "number" ||
+    !Number.isInteger(value.attempt_count) || value.attempt_count < 0 ||
+    (value.last_error_code !== null &&
+      (typeof value.last_error_code !== "string" || !SAFE_ERROR_CODES.has(value.last_error_code)))
+  ) return null;
+  return {
+    participant_id: value.participant_id,
+    status: value.status as ApprovedAutomaticJob["status"],
     attempt_count: value.attempt_count,
     last_error_code: value.last_error_code,
   };
@@ -139,11 +181,12 @@ export async function POST(request: NextRequest) {
 
     const participantIds = participants.map((item) => item!.id);
     const deliveries = new Map<string, ApprovedDelivery>();
+    const automaticJobs = new Map<string, ApprovedAutomaticJob>();
     if (participantIds.length > 0) {
       const deliveryUrl = new URL("/rest/v1/eco_case_deliveries", configuration.supabaseUrl);
       deliveryUrl.searchParams.set(
         "select",
-        "participant_id,status,sent_at,opened_at,attempt_count,last_error_code",
+        "participant_id,status,sent_at,opened_at,attempt_count,last_error_code,origin",
       );
       deliveryUrl.searchParams.set("case_id", "eq.eco-sp-001");
       deliveryUrl.searchParams.set("participant_id", `in.(${participantIds.join(",")})`);
@@ -166,17 +209,52 @@ export async function POST(request: NextRequest) {
         const { participant_id, ...approved } = delivery;
         deliveries.set(participant_id, approved);
       }
+
+      const jobUrl = new URL("/rest/v1/eco_automatic_delivery_jobs", configuration.supabaseUrl);
+      jobUrl.searchParams.set(
+        "select",
+        "participant_id,status,attempt_count,last_error_code,created_at",
+      );
+      jobUrl.searchParams.set("case_id", "eq.eco-sp-001");
+      jobUrl.searchParams.set("participant_id", `in.(${participantIds.join(",")})`);
+      jobUrl.searchParams.set("order", "created_at.desc");
+      jobUrl.searchParams.set("limit", "100");
+      const jobResponse = await fetch(jobUrl, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      if (!jobResponse.ok) return genericResponse("participant_query_failed", 502);
+      const rawJobs: unknown = await jobResponse.json().catch(() => null);
+      if (!Array.isArray(rawJobs) || rawJobs.length > 100) {
+        return genericResponse("invalid_response", 502);
+      }
+      for (const rawJob of rawJobs) {
+        const job = parseAutomaticJob(rawJob);
+        if (!job) return genericResponse("invalid_response", 502);
+        if (automaticJobs.has(job.participant_id)) continue;
+        const { participant_id, ...approved } = job;
+        automaticJobs.set(participant_id, approved);
+      }
     }
 
     const approved: ApprovedParticipant[] = participants.map((participant) => {
       const delivery = deliveries.get(participant!.id);
+      const automaticJob = automaticJobs.get(participant!.id);
+      const jobStatus = automaticJob?.status === "pending" ||
+          automaticJob?.status === "processing"
+        ? "sending"
+        : automaticJob?.status === "failed"
+        ? "failed"
+        : null;
       return {
         ...participant!,
-        delivery_status: delivery?.status ?? null,
+        delivery_status: delivery?.status ?? jobStatus,
         sent_at: delivery?.sent_at ?? null,
         opened_at: delivery?.opened_at ?? null,
-        attempt_count: delivery?.attempt_count ?? null,
-        last_error_code: delivery?.last_error_code ?? null,
+        attempt_count: delivery?.attempt_count ?? automaticJob?.attempt_count ?? null,
+        last_error_code: delivery?.last_error_code ?? automaticJob?.last_error_code ?? null,
+        delivery_origin: delivery?.origin ?? (jobStatus ? "automatic" : null),
       };
     });
     return successResponse({ success: true, participants: approved });

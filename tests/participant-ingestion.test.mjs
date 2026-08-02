@@ -102,7 +102,7 @@ test("Edge Function uses custom bearer authentication and only the RPC", () => {
   assert.match(config, /\[functions\.eco-participant-ingest\]\s+verify_jwt = false/);
 });
 
-test("ingestion has no email or automatic-delivery dependency", () => {
+test("ingestion has no email implementation or direct delivery-table write", () => {
   assert.doesNotMatch(
     edgeFunction,
     /postmark|nodemailer|sendgrid|resend|sendEmail|send_email|eco_case_deliveries/i,

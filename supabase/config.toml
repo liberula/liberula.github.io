@@ -18,3 +18,9 @@ verify_jwt = false
 
 [functions.eco-case-delivery-open]
 verify_jwt = false
+
+[functions.eco-automation-settings]
+verify_jwt = false
+
+[functions.eco-automatic-delivery-dispatch]
+verify_jwt = false

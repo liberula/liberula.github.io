@@ -9,6 +9,7 @@ type LocalConfiguration = {
   supabaseUrl: string;
   secretKey: string;
   deliveryFunctionUrl: string;
+  automationSettingsFunctionUrl: string;
   deliveryAdminSecret: string;
 };
 
@@ -78,10 +79,16 @@ export function readLocalConfiguration(): LocalConfiguration | null {
       "/functions/v1/eco-case-delivery"
   ) return null;
 
+  const automationSettingsFunction = new URL(
+    "/functions/v1/eco-automation-settings",
+    supabase,
+  );
+
   return {
     supabaseUrl: supabase.origin,
     secretKey,
     deliveryFunctionUrl: deliveryFunction.toString(),
+    automationSettingsFunctionUrl: automationSettingsFunction.toString(),
     deliveryAdminSecret,
   };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   filterParticipants,
   getOpeningState,
@@ -23,6 +23,12 @@ type Participant = {
   opened_at: string | null;
   attempt_count: number | null;
   last_error_code: string | null;
+  delivery_origin: "manual" | "automatic" | null;
+};
+
+type AutomationSettings = {
+  automatic_case_delivery_enabled: boolean;
+  counts: { pending: number; failed: number; completed_last_24h: number };
 };
 
 type OperationResult = {
@@ -72,6 +78,7 @@ const ERROR_LABELS: Record<string, string> = {
   send_failed: "O envio não pôde ser concluído.",
   preview_failed: "A pré-visualização não pôde ser gerada.",
   invalid_response: "O serviço retornou uma resposta inválida.",
+  automation_settings_failed: "Não foi possível consultar ou alterar o envio automático.",
   postmark_configuration_missing: "Configuração do Postmark ausente.",
   postmark_timeout: "O Postmark não respondeu dentro do limite.",
   postmark_network_error: "Falha de rede ao contatar o Postmark.",
@@ -83,6 +90,10 @@ const ERROR_LABELS: Record<string, string> = {
   participant_ineligible: "Participante inelegível para envio.",
   case_inactive: "O caso não está ativo.",
   retry_limit_reached: "Limite de tentativas atingido.",
+  temporary_dispatch_failure: "Falha temporária no processador automático.",
+  automation_disabled: "O envio automático foi desativado antes do processamento.",
+  already_sent: "O participante já recebeu este caso.",
+  invalid_email: "O endereço de e-mail não é válido para envio.",
   internal_error: "Falha operacional interna.",
 };
 
@@ -110,12 +121,13 @@ export default function EcoDeliveryPanel() {
   const [results, setResults] = useState<OperationResult[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("desktop");
+  const [automation, setAutomation] = useState<AutomationSettings | null>(null);
 
   useEffect(() => {
     setLocalAccess(isLocalOperatorHostname(window.location.hostname));
   }, []);
 
-  async function refreshParticipants() {
+  const refreshParticipants = useCallback(async () => {
     setLoading(true);
     setNotice("");
     try {
@@ -142,11 +154,37 @@ export default function EcoDeliveryPanel() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  const refreshAutomation = useCallback(async () => {
+    try {
+      const response = await fetch("/api/internal/eco/automation-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get" }),
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => null);
+      if (
+        !response.ok || payload?.success !== true ||
+        typeof payload.automatic_case_delivery_enabled !== "boolean"
+      ) {
+        setNotice(safeErrorLabel(payload?.error, "Não foi possível consultar o envio automático."));
+        return;
+      }
+      setAutomation(payload);
+    } catch {
+      setNotice("Não foi possível consultar o envio automático.");
+    }
+  }, []);
+
+  const refreshOperations = useCallback(async () => {
+    await Promise.all([refreshParticipants(), refreshAutomation()]);
+  }, [refreshAutomation, refreshParticipants]);
 
   useEffect(() => {
-    if (localAccess) void refreshParticipants();
-  }, [localAccess]);
+    if (localAccess) void refreshOperations();
+  }, [localAccess, refreshOperations]);
 
   const filtered = useMemo(() => filterParticipants(participants, {
     search,
@@ -193,9 +231,41 @@ export default function EcoDeliveryPanel() {
       }
       setResults(payload.results);
       setNotice("Operação concluída. Confira o resultado por participante.");
-      await refreshParticipants();
+      await refreshOperations();
     } catch {
       setNotice("O envio não pôde ser concluído.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function changeAutomation(enabled: boolean) {
+    const confirmation = enabled
+      ? "Ao ativar, toda nova inscrição elegível passará a receber automaticamente um e-mail real pelo Postmark.\n\nATIVAR ENVIO AUTOMÁTICO"
+      : "Novas inscrições deixarão de receber e-mails automaticamente. Envios manuais continuarão disponíveis.\n\nDESATIVAR ENVIO AUTOMÁTICO";
+    if (!window.confirm(confirmation)) return;
+    setLoading(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/internal/eco/automation-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set",
+          automatic_case_delivery_enabled: enabled,
+        }),
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success !== true) {
+        setNotice(safeErrorLabel(payload?.error, "Não foi possível alterar o envio automático."));
+        return;
+      }
+      setAutomation(payload);
+      setNotice(enabled ? "Envio automático ativado." : "Envio automático desativado.");
+      await refreshParticipants();
+    } catch {
+      setNotice("Não foi possível alterar o envio automático.");
     } finally {
       setLoading(false);
     }
@@ -270,6 +340,43 @@ export default function EcoDeliveryPanel() {
         AMBIENTE LOCAL — AÇÕES PODEM ENVIAR E-MAILS REAIS
       </div>
 
+      <section className={styles.automationSection} aria-labelledby="automation-heading">
+        <div className={styles.sectionHeading}>
+          <div>
+            <h2 id="automation-heading">ENVIO AUTOMÁTICO DE NOVAS INSCRIÇÕES</h2>
+            <p className={automation?.automatic_case_delivery_enabled ? styles.enabledState : styles.disabledState}>
+              {automation === null
+                ? "CARREGANDO"
+                : automation.automatic_case_delivery_enabled
+                ? "LIGADO"
+                : "DESLIGADO"}
+            </p>
+          </div>
+          <button
+            className={automation?.automatic_case_delivery_enabled ? styles.dangerButton : undefined}
+            type="button"
+            disabled={loading || !automation}
+            onClick={() => void changeAutomation(!automation?.automatic_case_delivery_enabled)}
+          >
+            {automation?.automatic_case_delivery_enabled
+              ? "DESATIVAR ENVIO AUTOMÁTICO"
+              : "ATIVAR ENVIO AUTOMÁTICO"}
+          </button>
+        </div>
+        <p>
+          {automation === null
+            ? "Consultando o estado persistido da automação."
+            : automation.automatic_case_delivery_enabled
+            ? "Novas inscrições elegíveis receberão automaticamente o Caso ECO-SP-001."
+            : "Novas inscrições serão cadastradas, mas não receberão e-mail automaticamente."}
+        </p>
+        <div className={styles.automationCounters}>
+          <span>Envios automáticos pendentes <strong>{automation?.counts.pending ?? "—"}</strong></span>
+          <span>Envios automáticos falhos <strong>{automation?.counts.failed ?? "—"}</strong></span>
+          <span>Envios automáticos concluídos nas últimas 24 horas <strong>{automation?.counts.completed_last_24h ?? "—"}</strong></span>
+        </div>
+      </section>
+
       <section className={styles.testSection} aria-labelledby="controlled-test-heading">
         <h2 id="controlled-test-heading">TESTE CONTROLADO</h2>
         <p>Localize um endereço de teste já registrado. O painel não cria participantes.</p>
@@ -288,7 +395,7 @@ export default function EcoDeliveryPanel() {
             <h2 id="participants-heading">PARTICIPANTES</h2>
             <p>{selectedIds.size} de 10 selecionados</p>
           </div>
-          <button type="button" onClick={() => void refreshParticipants()} disabled={loading}>ATUALIZAR</button>
+          <button type="button" onClick={() => void refreshOperations()} disabled={loading}>ATUALIZAR</button>
         </div>
 
         <div className={styles.filters}>
@@ -314,7 +421,7 @@ export default function EcoDeliveryPanel() {
 
         <div className={styles.tableWrapper}>
           <table>
-            <thead><tr><th scope="col">Seleção</th><th scope="col">Nome</th><th scope="col">E-mail</th><th scope="col">Envio</th><th scope="col">Abertura</th><th scope="col">Último envio</th><th scope="col">Ações</th></tr></thead>
+            <thead><tr><th scope="col">Seleção</th><th scope="col">Nome</th><th scope="col">E-mail</th><th scope="col">Envio</th><th scope="col">Origem</th><th scope="col">Abertura</th><th scope="col">Último envio</th><th scope="col">Ações</th></tr></thead>
             <tbody>
               {filtered.map((participant) => {
                 const status = getOperatorStatus(participant);
@@ -326,17 +433,18 @@ export default function EcoDeliveryPanel() {
                     <td><strong>{participant.name || "—"}</strong></td>
                     <td>{participant.email}</td>
                     <td><span className={`${styles.status} ${styles[`status_${status}`]}`}>{STATUS_LABELS[status]}</span></td>
+                    <td>{participant.delivery_origin === "automatic" ? "AUTOMÁTICO" : participant.delivery_origin === "manual" ? "MANUAL" : "—"}</td>
                     <td>{opening === "opened" ? `ABRIU EM ${formatDate(participant.opened_at)}` : OPENING_LABELS[opening]}</td>
                     <td>{formatDate(participant.sent_at)}</td>
                     <td><div className={styles.rowActions}>
                       {eligible && <button className={participant.delivery_status === "failed" ? styles.dangerButton : undefined} type="button" onClick={() => void sendParticipants([participant])}>{getSendActionLabel(participant)}</button>}
-                      {participant.delivery_status === "failed" && <button type="button" onClick={() => setNotice(safeErrorLabel(participant.last_error_code, "Falha de envio sem detalhe operacional."))}>VER ERRO</button>}
+                      {participant.delivery_status === "failed" && <button type="button" onClick={() => setNotice(participant.delivery_origin === "automatic" ? `FALHA NO ENVIO AUTOMÁTICO — ${safeErrorLabel(participant.last_error_code, "Falha operacional.")}` : safeErrorLabel(participant.last_error_code, "Falha de envio sem detalhe operacional."))}>VER ERRO</button>}
                       {participant.delivery_status === "sent" && <button type="button" onClick={() => openAccess(participant)}>ABRIR ACESSO</button>}
                     </div></td>
                   </tr>
                 );
               })}
-              {!loading && filtered.length === 0 && <tr><td colSpan={7}>Nenhum participante encontrado.</td></tr>}
+              {!loading && filtered.length === 0 && <tr><td colSpan={8}>Nenhum participante encontrado.</td></tr>}
             </tbody>
           </table>
         </div>
