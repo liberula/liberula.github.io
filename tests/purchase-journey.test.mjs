@@ -58,14 +58,17 @@ test("purchase CTA carries safe referral context to the dedicated route", () => 
     "/eco/eco-sp-001/comprar?ref=AB7C09DE12FF",
   );
   assert.match(reveal, /href=\{buildPurchasePath\(referralCode\)\}/);
-  assert.match(reveal, /CONTINUAR A INVESTIGAÇÃO/);
+  assert.match(reveal, /FINANCIAR A PRÓXIMA MISSÃO/);
   assert.doesNotMatch(reveal, /<BuyerForm/);
 });
 
 test("dedicated purchase page contains campaign, price, and buyer form", () => {
   assert.match(purchasePage, /<PurchaseExperience \/>/);
   assert.match(purchase, /<FounderProgress/);
-  assert.match(purchase, /R\$ 79,90/);
+  assert.match(purchase, /R\$ 49,90/);
+  assert.match(purchase, /Até 90 dias após a meta ser atingida/);
+  assert.match(purchase, /60 a 120 minutos/);
+  assert.doesNotMatch(purchase, /Endereço de entrega|dossiê físico/iu);
   assert.match(purchase, /<BuyerForm referralCode=\{referralCode\} \/>/);
   assert.match(purchase, /eco_purchase_page_viewed/);
 });

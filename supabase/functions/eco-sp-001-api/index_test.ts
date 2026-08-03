@@ -25,15 +25,6 @@ const validBuyer: Buyer = {
   name: "Ana Júlia da Silva",
   email: "ana.julia@example.com",
   whatsapp: "11998765432",
-  address: {
-    street: "Rua São Bento",
-    number: "123",
-    complement: "Apto. 42",
-    neighborhood: "Sé",
-    city: "São Paulo",
-    state: "SP",
-    postalCode: "01011100",
-  },
 };
 
 const completeConfig: EcoApiConfig = {
@@ -608,11 +599,6 @@ Deno.test("order request normalizes buyer and fixes all commerce fields", async 
     name: "  Ana   Júlia  ",
     email: " ANA@EXAMPLE.COM ",
     whatsapp: "(11) 99876-5432",
-    address: {
-      ...validBuyer.address,
-      state: "sp",
-      postalCode: "01011-100",
-    },
   };
   const response = await handler(orderRequest(buyer));
   assert(response.status === 201, "expected order creation");
@@ -632,13 +618,11 @@ Deno.test("order request normalizes buyer and fixes all commerce fields", async 
     title: ECO_PRODUCT.title,
     quantity: 1,
     currencyId: "BRL",
-    unitPrice: 79.9,
+    unitPrice: 49.9,
   }, "commerce values were not fixed");
   assert(request.buyer.name === "Ana Júlia", "name not normalized");
   assert(request.buyer.email === "ana@example.com", "email not normalized");
   assert(request.buyer.whatsapp === "11998765432", "phone not normalized");
-  assert(request.buyer.address.state === "SP", "state not normalized");
-  assert(request.buyer.address.postalCode === "01011100", "CEP not normalized");
   assert(request.autoReturn === "approved", "auto return missing");
   assert(
     request.externalReference === "eco_synthetic_external_reference",
@@ -650,21 +634,12 @@ const invalidBuyerMutations: Array<[string, (buyer: JsonBuyer) => void]> = [
   ["name", (buyer) => buyer.name = ""],
   ["email", (buyer) => buyer.email = "invalid"],
   ["whatsapp", (buyer) => buyer.whatsapp = "123"],
-  ["street", (buyer) => buyer.address.street = ""],
-  ["number", (buyer) => buyer.address.number = ""],
-  ["complement", (buyer) => buyer.address.complement = "x".repeat(81)],
-  ["complement type", (buyer) => buyer.address.complement = null],
-  ["neighborhood", (buyer) => buyer.address.neighborhood = ""],
-  ["city", (buyer) => buyer.address.city = ""],
-  ["state", (buyer) => buyer.address.state = "S"],
-  ["postalCode", (buyer) => buyer.address.postalCode = "123"],
 ];
 
 type JsonBuyer = {
   name: unknown;
   email: unknown;
   whatsapp: unknown;
-  address: Record<string, unknown>;
 };
 
 for (const [field, mutate] of invalidBuyerMutations) {
@@ -680,10 +655,7 @@ Deno.test("order rejects unknown buyer and client-controlled commerce fields", a
   for (
     const request of [
       orderRequest({ ...validBuyer, status: "paid" }),
-      orderRequest({
-        ...validBuyer,
-        address: { ...validBuyer.address, providerId: "private" },
-      }),
+      orderRequest({ ...validBuyer, address: { street: "private" } }),
       orderRequest(validBuyer, { amount: 1 }),
       orderRequest(validBuyer, { currency: "USD" }),
       orderRequest(validBuyer, { returnUrl: "https://attacker.example" }),
@@ -901,7 +873,7 @@ Deno.test("Mercado Pago adapter accepts a sandbox preference response", async ()
       title: ECO_PRODUCT.title,
       quantity: 1,
       currencyId: "BRL",
-      unitPrice: 79.90,
+      unitPrice: 49.90,
     },
     buyer: validBuyer,
     externalReference: "synthetic-external-reference",
@@ -946,7 +918,7 @@ Deno.test("Mercado Pago adapter selects init_point only in production mode", asy
       title: ECO_PRODUCT.title,
       quantity: 1,
       currencyId: "BRL",
-      unitPrice: 79.90,
+      unitPrice: 49.90,
     },
     buyer: validBuyer,
     externalReference: "synthetic-external-reference",
@@ -971,7 +943,7 @@ Deno.test("Mercado Pago failures and invalid JSON produce safe diagnostics", asy
           JSON.stringify({
             error: "invalid_preference",
             message:
-              `Rejected ${validBuyer.name} ${validBuyer.email} ${validBuyer.whatsapp} ${validBuyer.address.street}`,
+              `Rejected ${validBuyer.name} ${validBuyer.email} ${validBuyer.whatsapp}`,
           }),
           { status: 400, headers: { "Content-Type": "application/json" } },
         ),
@@ -1018,7 +990,6 @@ Deno.test("Mercado Pago failures and invalid JSON produce safe diagnostics", asy
         validBuyer.name,
         validBuyer.email,
         validBuyer.whatsapp,
-        validBuyer.address.street,
         completeConfig.supabaseServiceRoleKey!,
       ]
     ) {

@@ -10,15 +10,6 @@ const buyer = {
   name: "Ana Júlia da Silva",
   email: "ana@example.com",
   whatsapp: "11998765432",
-  address: {
-    street: "Rua São Bento",
-    number: "123",
-    complement: "",
-    neighborhood: "Sé",
-    city: "São Paulo",
-    state: "SP",
-    postalCode: "01011100",
-  },
 };
 
 test("builds the order endpoint from the configured API base URL", () => {

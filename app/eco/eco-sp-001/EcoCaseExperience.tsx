@@ -66,13 +66,13 @@ export default function EcoCaseExperience() {
         <p className={styles.lead}>
           Você recebeu um conjunto de indícios vinculados a uma ocorrência na
           cidade de São Paulo. Examine o material disponibilizado, identifique o
-          estabelecimento e registre sua conclusão.
+          local investigado e registre sua conclusão.
         </p>
 
         <section className={styles.dossier} aria-labelledby="case-directive">
           <h2 id="case-directive">DIRETRIZ OPERACIONAL</h2>
           <p>
-            Informe o nome do local com a maior precisão possível. Variações de
+            Informe o nome ou endereço do local com a maior precisão possível. Variações de
             caixa, acentuação e espaçamento não alteram a análise.
           </p>
         </section>

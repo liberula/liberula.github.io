@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { FiArrowRight, FiCheck } from "react-icons/fi";
+import { FiArrowRight, FiCheck, FiInstagram } from "react-icons/fi";
 import { safePosthogCapture } from "../../analytics/posthog";
 import {
   buildCampaignProgressEndpoint,
@@ -13,22 +13,34 @@ import {
 } from "./campaign-contract.mjs";
 import FounderProgress, { type CampaignProgress } from "./FounderProgress";
 import ShareControls from "./ShareControls";
-import {
-  getRevealDelay,
-  getUnlockStatus,
-  isStageVisible,
-  LAST_REVEAL_STEP,
-  REVEAL_STAGES,
-} from "./reveal-timeline.mjs";
+import { getReportReleaseDelay } from "./reveal-timeline.mjs";
 import styles from "./EcoCase.module.css";
 
 const ANALYTICS_PROPERTIES = { case_id: "eco-sp-001" };
 const ECO_API_BASE_URL = process.env.NEXT_PUBLIC_ECO_API_BASE_URL;
 const capturedEvents = new Set<string>();
 
-function captureStageOnce(
+function configuredInstagramUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== "https:" ||
+      !["instagram.com", "www.instagram.com"].includes(url.hostname)
+    ) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+const ECO_INSTAGRAM_URL = configuredInstagramUrl(
+  process.env.NEXT_PUBLIC_ECO_INSTAGRAM_URL,
+);
+
+function captureOnce(
   eventName: string,
-  properties: Record<string, string | boolean> = {},
+  properties: Record<string, string | boolean | number> = {},
 ) {
   const storageKey = `eco-sp-001:${eventName}`;
   try {
@@ -53,372 +65,341 @@ function usePrefersReducedMotion() {
   return reducedMotion;
 }
 
-function useViewedEvent<T extends HTMLElement>(
-  eventName: string,
-  enabled: boolean,
-): RefObject<T> {
+function useViewedEvent<T extends HTMLElement>(eventName: string): RefObject<T> {
   const elementRef = useRef<T>(null);
   const capturedRef = useRef(false);
   useEffect(() => {
     const element = elementRef.current;
-    if (!enabled || !element || capturedRef.current) return;
+    if (!element || capturedRef.current) return;
     if (!("IntersectionObserver" in window)) {
       capturedRef.current = true;
-      captureStageOnce(eventName);
+      captureOnce(eventName);
       return;
     }
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting || capturedRef.current) return;
       capturedRef.current = true;
-      captureStageOnce(eventName);
+      captureOnce(eventName);
       observer.disconnect();
-    }, { threshold: 0.35 });
+    }, { threshold: 0.3 });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [enabled, eventName]);
+  }, [eventName]);
   return elementRef;
 }
 
-function EvidencePlaceholder({
-  label,
-  description,
+function PhotoPlaceholder({
+  assetId,
+  ratio,
+  caption,
+  editorialDescription,
+  viewedEvent,
 }: {
-  label: string;
-  description: string;
+  assetId: string;
+  ratio: string;
+  caption: string;
+  editorialDescription: string;
+  viewedEvent: string;
 }) {
+  const placeholderRef = useViewedEvent<HTMLElement>(viewedEvent);
   return (
-    <figure className={styles.evidencePlaceholder} data-asset-status="placeholder">
-      <div aria-hidden="true"><span>IMAGEM PENDENTE</span></div>
-      <figcaption><strong>{label}</strong>{description}</figcaption>
+    <figure
+      ref={placeholderRef}
+      className={styles.reportPhotoPlaceholder}
+      data-asset-status="placeholder"
+      data-asset-id={assetId}
+      data-asset-ratio={ratio}
+      data-editorial-description={editorialDescription}
+    >
+      <div style={{ aspectRatio: ratio.replace(":", " / ") }} aria-hidden="true">
+        <span>ANEXO FOTOGRÁFICO PENDENTE</span>
+        <code>{assetId}</code>
+      </div>
+      <figcaption>{caption}</figcaption>
     </figure>
   );
 }
 
-export default function PostSolveReveal({
-  referralCode,
-}: {
-  referralCode: string | null;
-}) {
-  const [step, setStep] = useState(0);
+const RADIO_ENTRIES = {
+  entry: [
+    ["02:17:42", "CONTROLE", "Quina, confirme entrada."],
+    ["02:17:46", "QUINA", "Entrada confirmada."],
+    ["02:17:51", "CONTROLE", "Alguma anomalia visível?"],
+    ["02:17:55", "QUINA", "Só a decoração, até agora."],
+    ["02:18:02", "CONTROLE", "Mantenha o canal aberto."],
+    ["02:18:05", "QUINA", "Sempre mantenho."],
+  ],
+  room: [
+    ["02:20:14", "CONTROLE", "Quina?"],
+    ["02:20:20", "QUINA", "Tem alguma coisa muito errada aqui."],
+    ["02:20:23", "CONTROLE", "Descreva."],
+    ["02:20:29", "QUINA", "Estou no quarto do Valença."],
+    ["02:20:32", "CONTROLE", "Confirmado."],
+    ["02:20:36", "QUINA", "A porta do escritório está aberta."],
+    ["02:20:40", "CONTROLE", "O cômodo foi removido durante a vistoria."],
+    ["02:20:44", "QUINA", "Não estou vendo um cômodo."],
+    ["02:20:48", "CONTROLE", "Então o que está vendo?"],
+    ["02:20:55", "QUINA", "A porta do escritório está levando para um lugar que não está dentro do prédio."],
+    ["02:21:11", "CONTROLE", "Registre uma imagem para o arquivo."],
+    ["02:21:15", "QUINA", "Vou montar o equipamento."],
+  ],
+  inspection: [
+    ["02:22:03", "CONTROLE", "Imagem recebida. Não avance."],
+    ["02:22:07", "QUINA", "Estou vendo uma saída no fim do corredor."],
+    ["02:22:10", "CONTROLE", "Uma saída para onde?"],
+    ["02:22:14", "QUINA", "Não sei."],
+    ["02:22:18", "CONTROLE", "Quina, aguarde a equipe de apoio."],
+    ["02:22:22", "QUINA", "Tem alguma coisa escrita na porta."],
+    ["02:22:25", "CONTROLE", "Não se aproxime."],
+    ["02:22:31", "QUINA", "Eu só preciso chegar perto o suficiente para registrar."],
+    ["02:22:34", "CONTROLE", "Negativo. Você está sozinho."],
+    ["02:22:49", "QUINA", "Isso é incrível."],
+    ["02:22:53", "CONTROLE", "Quina, retorne ao quarto."],
+    ["02:22:58", "QUINA", "Preciso documentar isso."],
+    ["02:23:01", "CONTROLE", "O equipamento já está registrando."],
+    ["02:23:07", "QUINA", "Não. Não é suficiente."],
+    ["02:23:10", "CONTROLE", "Quina, recue agora."],
+    ["02:23:16", "QUINA", "Eu preciso abrir essa porta."],
+    ["02:23:19", "CONTROLE", "Não abra a porta."],
+  ],
+  interruption: [
+    ["02:23:27", "CONTROLE", "Quina, confirme posição."],
+    ["02:23:33", "QUINA", "Eu acho que isso sabia que eu estava aqui."],
+    ["02:23:36", "CONTROLE", "Repita."],
+    ["02:23:50", "CONTROLE", "Quina?"],
+    ["02:23:54", "CONTROLE", "Quina, responda."],
+    ["02:23:59", "CONTROLE", "Equipe de apoio autorizada. Não interrompam o canal."],
+  ],
+} as const;
+
+function RadioTranscript({ entries }: { entries: readonly (readonly [string, string, string])[] }) {
+  return (
+    <div className={styles.reportTranscript} role="log" aria-label="Transcrição do canal operacional">
+      {entries.map(([time, speaker, message]) => (
+        <p key={`${time}-${speaker}`}>
+          <time dateTime={time}>{time}</time>
+          <strong>{speaker}</strong>
+          <span>{message}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
+export default function PostSolveReveal({ referralCode }: { referralCode: string | null }) {
+  const [reportVisible, setReportVisible] = useState(false);
   const [campaignPhase, setCampaignPhase] = useState<"loading" | "ready" | "failure">("loading");
   const [campaign, setCampaign] = useState<CampaignProgress | null>(null);
   const reducedMotion = usePrefersReducedMotion();
   const confirmationHeadingRef = useRef<HTMLHeadingElement>(null);
-  const operationRef = useViewedEvent<HTMLElement>(
-    "eco_case_agent_report_viewed",
-    isStageVisible(step, REVEAL_STAGES.operation),
-  );
-  const comparisonRef = useViewedEvent<HTMLElement>(
-    "eco_case_white_room_viewed",
-    isStageVisible(step, REVEAL_STAGES.comparison),
-  );
-  const quinaLogRef = useViewedEvent<HTMLElement>(
-    "eco_case_quina_log_viewed",
-    isStageVisible(step, REVEAL_STAGES.transmission),
-  );
-  const redDoorRef = useViewedEvent<HTMLElement>(
-    "eco_case_red_door_revealed",
-    isStageVisible(step, REVEAL_STAGES.impossibleSpace),
-  );
-  const conclusionRef = useViewedEvent<HTMLElement>(
-    "eco_case_free_ending_completed",
-    isStageVisible(step, REVEAL_STAGES.reclassification),
-  );
-  const offerRef = useViewedEvent<HTMLElement>(
-    "eco_case_offer_viewed",
-    isStageVisible(step, REVEAL_STAGES.offer),
-  );
+  const reportEndRef = useViewedEvent<HTMLElement>("eco_case_report_completed");
+  const noteRef = useViewedEvent<HTMLElement>("eco_case_liberula_note_viewed");
 
   useEffect(() => {
-    captureStageOnce("eco_case_reveal_started");
+    captureOnce("eco_case_reveal_started");
     confirmationHeadingRef.current?.focus();
   }, []);
 
   useEffect(() => {
-    if (step >= LAST_REVEAL_STEP) return;
-    const timeout = window.setTimeout(
-      () => setStep((current) => Math.min(current + 1, LAST_REVEAL_STEP)),
-      getRevealDelay(step, reducedMotion),
-    );
+    const timeout = window.setTimeout(() => {
+      setReportVisible(true);
+      captureOnce("eco_case_report_released");
+    }, getReportReleaseDelay(reducedMotion));
     return () => window.clearTimeout(timeout);
-  }, [reducedMotion, step]);
+  }, [reducedMotion]);
 
   useEffect(() => {
-    if (!isStageVisible(step, REVEAL_STAGES.offer)) return;
+    if (!reportVisible) return;
     const endpoint = buildCampaignProgressEndpoint(ECO_API_BASE_URL);
     if (!endpoint) {
       setCampaignPhase("failure");
-      safePosthogCapture("eco_founder_progress_error", {
-        case_id: "eco-sp-001",
-        campaign_id: ECO_CAMPAIGN_ID,
-      });
       return;
     }
-    let cancelled = false;
-    let lastFetch = 0;
     const controller = new AbortController();
-    async function loadProgress() {
-      if (document.hidden || Date.now() - lastFetch < 30_000) return;
-      lastFetch = Date.now();
+    void (async () => {
       try {
-        const response = await fetch(endpoint as string, {
+        const response = await fetch(endpoint, {
           headers: { Accept: "application/json" },
           signal: controller.signal,
         });
         const body: unknown = await response.json().catch(() => null);
         const parsed = response.ok ? parseCampaignProgress(body) : null;
-        if (!parsed) throw new Error("campaign_progress_unavailable");
-        if (cancelled) return;
-        const nextCampaign = parsed as CampaignProgress;
-        setCampaign(nextCampaign);
+        if (!parsed) throw new Error("campaign_unavailable");
+        setCampaign(parsed as CampaignProgress);
         setCampaignPhase("ready");
-        captureStageOnce("eco_founder_progress_viewed", {
-          campaign_id: ECO_CAMPAIGN_ID,
-          campaign_state: nextCampaign.status,
-        });
-        if (nextCampaign.goalReached) {
-          captureStageOnce("eco_founder_goal_reached_viewed", {
-            campaign_id: ECO_CAMPAIGN_ID,
-            campaign_state: nextCampaign.status,
-          });
-        }
       } catch (error) {
-        if (cancelled || (error instanceof DOMException && error.name === "AbortError")) return;
-        setCampaignPhase("failure");
-        safePosthogCapture("eco_founder_progress_error", {
-          case_id: "eco-sp-001",
-          campaign_id: ECO_CAMPAIGN_ID,
-        });
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setCampaignPhase("failure");
+        }
       }
-    }
-    const onFocus = () => void loadProgress();
-    const interval = window.setInterval(() => void loadProgress(), 60_000);
-    window.addEventListener("focus", onFocus);
-    void loadProgress();
-    return () => {
-      cancelled = true;
-      controller.abort();
-      window.clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [step]);
-
-  const inUnlockTransition = step < REVEAL_STAGES.operation;
+    })();
+    return () => controller.abort();
+  }, [reportVisible]);
 
   return (
     <section className={styles.reveal} aria-labelledby="eco-case-success-title">
       <section className={styles.confirmation} aria-label="Local identificado">
         <span className={styles.statusLabel}><FiCheck aria-hidden="true" /> LOCAL IDENTIFICADO</span>
-        <h1 ref={confirmationHeadingRef} id="eco-case-success-title" tabIndex={-1}>
-          Rua Benjamin Constant, 200
-        </h1>
-        <p className={styles.resolutionRegion}>Sé — São Paulo</p>
-        <p>A conclusão foi incorporada ao registro operacional ECO-SP-001.</p>
+        <h1 ref={confirmationHeadingRef} id="eco-case-success-title" tabIndex={-1}>Rua Benjamin Constant, 200</h1>
+        <p className={styles.resolutionRegion}>Sé, São Paulo</p>
+        <p>A conclusão foi incorporada ao registro ECO-SP-001.</p>
+        <p>Um relatório posterior à avaliação foi autorizado para consulta.</p>
       </section>
 
-      {inUnlockTransition && (
-        <div className={styles.unlockTransition}>
-          <span className={styles.scanLine} aria-hidden="true" />
-          <p className={styles.unlockLabel} aria-live="polite" role="status">{getUnlockStatus(step)}</p>
-          <span className={styles.progressTrack} aria-hidden="true">
-            <span style={{ width: `${((step + 1) / REVEAL_STAGES.operation) * 100}%` }} />
-          </span>
-        </div>
+      {!reportVisible && (
+        <p className={styles.documentReleaseStatus} role="status" aria-live="polite">
+          LIBERANDO DOCUMENTO OPERACIONAL…
+        </p>
       )}
 
-      {isStageVisible(step, REVEAL_STAGES.operation) && (
-        <section ref={operationRef} className={`${styles.revealSection} ${styles.fieldReport}`} aria-labelledby="eco-operation-title">
-          <div className={styles.recordIdentity}>
-            <figure className={styles.personnelRecord}>
-              <Image
-                src="/eco/eco-sp-001/agent-field-record.png"
-                alt="Registro fotográfico operacional do agente Quina."
-                width={1122}
-                height={1402}
-                sizes="(max-width: 640px) calc(100vw - 72px), 300px"
+      {reportVisible && (
+        <>
+          <article className={styles.reportDocument} aria-labelledby="eco-report-title">
+            <header className={styles.reportHeader}>
+              <div className={styles.reportAgency}><span>E.C.O.</span><small>ENCONTRAR. CONTER. OCULTAR.</small></div>
+              <p>DOCUMENTO OPERACIONAL / ACESSO RESTRITO</p>
+              <h2 id="eco-report-title">RELATÓRIO DE RECONHECIMENTO OPERACIONAL</h2>
+              <dl className={styles.reportMetadata}>
+                <div><dt>Referência</dt><dd>ECO-SP-001</dd></div>
+                <div><dt>Operação</dt><dd>Inspeção do ponto de convergência</dd></div>
+                <div><dt>Agente de campo</dt><dd>Quina</dd></div>
+                <div><dt>Status</dt><dd>Contato interrompido</dd></div>
+                <div><dt>Classificação</dt><dd>Restrito</dd></div>
+              </dl>
+            </header>
+
+            <section className={styles.reportSection} aria-labelledby="report-entry-title">
+              <p className={styles.reportSectionNumber}>01</p>
+              <h3 id="report-entry-title">Entrada no imóvel</h3>
+              <p>Após a identificação do ponto final das rotas investigadas por Jonas Valença, o agente Quina foi enviado ao endereço para uma inspeção preliminar.</p>
+              <p>A entrada ocorreu às 02h17 por um acesso lateral já comprometido pela equipe de reconhecimento.</p>
+              <p>O imóvel permanecia parcialmente abandonado. Não havia sinais recentes de ocupação nas áreas de circulação, embora parte da rede elétrica continuasse ativa.</p>
+              <RadioTranscript entries={RADIO_ENTRIES.entry} />
+              <p>Quina avançou até o antigo apartamento de Jonas Valença. A porta principal estava destrancada. O interior havia sido esvaziado após o desaparecimento, mas ainda continha marcas da ocupação anterior e parte da instalação elétrica utilizada por Valença.</p>
+            </section>
+
+            <section className={styles.reportSection} aria-labelledby="report-room-title">
+              <p className={styles.reportSectionNumber}>02</p>
+              <h3 id="report-room-title">Quarto de Jonas Valença</h3>
+              <p>Quina entrou no quarto onde os registros pessoais de Jonas haviam sido encontrados.</p>
+              <p>Segundo a planta recuperada, a porta do escritório deveria levar a um cômodo pequeno, delimitado pela parede externa do edifício.</p>
+              <p>A transmissão permaneceu silenciosa por onze segundos.</p>
+              <RadioTranscript entries={RADIO_ENTRIES.room} />
+              <p>O agente descreveu um corredor extenso, com paredes deterioradas, divisórias antigas e iluminação irregular. A profundidade observada era incompatível com as dimensões externas do imóvel.</p>
+              <p>Também foram relatadas portas laterais em intervalos irregulares e mudanças de direção que não correspondiam à planta.</p>
+              <PhotoPlaceholder
+                assetId="eco-sp-001-postsolve-room-threshold"
+                ratio="16:10"
+                viewedEvent="eco_case_photo_1_viewed"
+                caption="Vista do quarto de Jonas Valença através da porta anteriormente associada ao escritório. A profundidade registrada excede os limites conhecidos do imóvel."
+                editorialDescription="Enquadramento a partir do quarto; porta aberta; começo do ambiente impossível; ainda sem Quina; corredor antigo, abandonado e plausível à primeira vista; nada monstruoso claramente visível."
               />
-              <figcaption>AGENTE QUINA / EQUIPE DE RECONHECIMENTO</figcaption>
-            </figure>
-            <div className={styles.recordHeader}>
-              <p className={styles.protocol}>ATUALIZAÇÃO OPERACIONAL / 02h17</p>
-              <h2 id="eco-operation-title">Entrada na central</h2>
-              <p className={styles.reportContext}>
-                Após a confirmação do ponto final das rotas, o agente Quina foi enviado ao local. A entrada física ocorreu às 02h17 por um acesso de serviço preparado pela E.C.O.
-              </p>
-              <p className={styles.reportContext}>
-                Placas técnicas, numeração de salas, equipamentos e marcas do edifício confirmaram que ele estava na central real. As portas remotas dos relatos não levavam diretamente até ali: os registros indicam uma sequência de pontos intermediários, com a central no fim da rota.
-              </p>
+            </section>
+
+            <section className={styles.reportSection} aria-labelledby="report-passage-title">
+              <p className={styles.reportSectionNumber}>03</p>
+              <h3 id="report-passage-title">Inspeção da passagem</h3>
+              <p>Após montar o equipamento de registro automático, Quina aproximou-se da entrada.</p>
+              <p>O controle determinou que ele aguardasse a chegada de uma segunda equipe.</p>
+              <RadioTranscript entries={RADIO_ENTRIES.inspection} />
+              <p>Quina atravessou a entrada antes que a ordem pudesse ser reiterada.</p>
+              <p>Nos segundos seguintes, o agente demonstrou alteração progressiva no padrão de resposta. Sua fala tornou-se menos objetiva e deixou de reconhecer parte das instruções do controle.</p>
+              <PhotoPlaceholder
+                assetId="eco-sp-001-postsolve-quina-final-record"
+                ratio="16:9"
+                viewedEvent="eco_case_photo_2_viewed"
+                caption="Último registro integral transmitido pelo equipamento automático."
+                editorialDescription="Espaço impossível mais profundo; Quina pequeno e de costas diante de uma segunda porta; captura pelo equipamento deixado para trás; arquitetura incoerente; superfície reflexiva plausível sem círculos ou marcações."
+              />
+            </section>
+
+            <section className={styles.reportSection} aria-labelledby="report-interruption-title">
+              <p className={styles.reportSectionNumber}>04</p>
+              <h3 id="report-interruption-title">Interrupção</h3>
+              <RadioTranscript entries={RADIO_ENTRIES.interruption} />
+              <p><strong>Sem resposta.</strong></p>
+              <p>O registro visual mostra Quina avançando além da segunda porta.</p>
+              <p>Às 02h23:41, a porta se fechou.</p>
+              <p>O agente não aparece tocando nela.</p>
+              <p>O canal permaneceu aberto por mais nove segundos. Foram registrados apenas interferência e um ruído de impacto sem origem identificada.</p>
+              <p>A transmissão foi encerrada às 02h24:03.</p>
+              <p>A equipe de apoio enviada ao imóvel confirmou a presença da anomalia de acesso relatada por Quina.</p>
+              <p>O agente não foi encontrado.</p>
+              <p>O ponto foi isolado pela E.C.O. e permanece sob monitoramento.</p>
+            </section>
+
+            <footer ref={reportEndRef} className={styles.reportSituation}>
+              <p className={styles.protocol}>SITUAÇÃO ATUAL</p>
+              <p>A anomalia de acesso relatada por Jonas Valença e confirmada pelo agente Quina foi localizada pela E.C.O. no imóvel investigado.</p>
+              <p>O agente Quina permanece desaparecido.</p>
+              <p>O ponto foi isolado e segue sob monitoramento contínuo.</p>
+              <dl className={styles.operationalStates}>
+                <div><dt>ENCONTRAR</dt><dd>concluído</dd></div>
+                <div><dt>CONTER</dt><dd>em andamento</dd></div>
+                <div><dt>OCULTAR</dt><dd>ativo</dd></div>
+              </dl>
+            </footer>
+          </article>
+
+          <section ref={noteRef} className={styles.liberulaNote} aria-labelledby="liberula-note-title">
+            <div className={styles.liberulaNoteBrand}>
+              <Image src="/eco/liberula-mark.svg" width={44} height={44} alt="" aria-hidden="true" />
+              <span>LIBERULA</span>
             </div>
-          </div>
-        </section>
-      )}
-
-      {isStageVisible(step, REVEAL_STAGES.interior) && (
-        <section className={`${styles.revealSection} ${styles.fieldReport}`} aria-labelledby="eco-interior-title">
-          <p className={styles.protocol}>RECONHECIMENTO INTERNO / CENTRAL CONFIRMADA</p>
-          <h2 id="eco-interior-title">Um prédio real, antigo e degradado</h2>
-          <p className={styles.reportContext}>O interior permanecia administrativo e técnico: tinta descascando, piso antigo, divisórias gastas, corredores vazios, iluminação deficiente e salas desocupadas. Nada indicava que toda a central fosse um espaço sobrenatural.</p>
-          <EvidencePlaceholder label="INTERIOR DEGRADADO DA CENTRAL" description="Placeholder do registro com placas técnicas, corredores gastos e sinais de abandono parcial." />
-        </section>
-      )}
-
-      {isStageVisible(step, REVEAL_STAGES.comparison) && (
-        <section ref={comparisonRef} className={`${styles.revealSection} ${styles.comparisonPanel}`} aria-labelledby="eco-comparison-title">
-          <p className={styles.protocol}>COMPARAÇÃO FORENSE / MESMO ENQUADRAMENTO</p>
-          <h2 id="eco-comparison-title">O ponto registrado por Jonas</h2>
-          <p className={styles.reportContext}>Quina alcançou o mesmo ponto fotografado por Jonas: mesmo corredor, paredes, elementos laterais e perspectiva. No registro anterior, o recuo, as marcas de batente e o término incorreto da parede sugeriam uma abertura — mas não havia porta.</p>
-          <div className={styles.comparisonGrid}>
-            <EvidencePlaceholder label="REGISTRO DE JONAS / SEM PORTA" description="Mesmo enquadramento. Parede degradada, recuo e marcas de batente; nenhuma porta visível." />
-            <EvidencePlaceholder label="REGISTRO DE QUINA / PORTA VERMELHA" description="Mesmo enquadramento e elementos laterais. Agora, uma porta vermelha ocupa exatamente o ponto vazio." />
-          </div>
-        </section>
-      )}
-
-      {isStageVisible(step, REVEAL_STAGES.transmission) && (
-        <section ref={quinaLogRef} className={`${styles.revealSection} ${styles.transmissionPanel}`} aria-labelledby="eco-transmission-title">
-          <p className={styles.protocol}>TRANSMISSÃO DE CAMPO / CANAL ATIVO</p>
-          <h2 id="eco-transmission-title">Registro operacional</h2>
-          <div className={styles.operationLog} role="log" aria-label="Transmissão do agente Quina dentro da central">
-            <p><time dateTime="02:17:42">02:17:42</time><strong>QUINA</strong><span>entrada confirmada</span></p>
-            <p><time dateTime="02:18:11">02:18:11</time><strong>QUINA</strong><span>corredor norte</span></p>
-            <p><time dateTime="02:18:19">02:18:19</time><strong>CONTROLE</strong><span>confirme o ponto registrado por Valença</span></p>
-            <p><time dateTime="02:18:27">02:18:27</time><strong>QUINA</strong><span>confirmado</span></p>
-            <p><time dateTime="02:18:31">02:18:31</time><strong>QUINA</strong><span>há uma porta aqui</span></p>
-            <p><time dateTime="02:18:36">02:18:36</time><strong>CONTROLE</strong><span>Valença não registrou nenhuma porta</span></p>
-            <p><time dateTime="02:18:41">02:18:41</time><strong>QUINA</strong><span>eu sei</span></p>
-            <p><time dateTime="02:18:55">02:18:55</time><strong>QUINA</strong><span>abrindo</span></p>
-          </div>
-        </section>
-      )}
-
-      {isStageVisible(step, REVEAL_STAGES.impossibleSpace) && (
-        <section ref={redDoorRef} className={`${styles.revealSection} ${styles.impossibleSpace}`} aria-labelledby="eco-impossible-title">
-          <p className={styles.protocol}>ABERTURA REGISTRADA / INCOMPATIBILIDADE ESPACIAL</p>
-          <h2 id="eco-impossible-title">Geometria incompatível</h2>
-          <p className={styles.reportContext}>A porta era vermelha, impecável, limpa e sem poeira, riscos ou desgaste. Parecia nova demais contra a tinta descascada e o corredor gasto da central.</p>
-          <p className={styles.reportContext}>Depois dela havia profundidade maior que o edifício, portas repetidas, ângulos incoerentes, luz sem fonte e escadas que pareciam retornar ao mesmo ponto. Fragmentos dos lugares descritos nas rotas surgiam ligados sem lógica aparente.</p>
-          <blockquote className={styles.quinaStatement}>
-            <p>“Isso não cabe dentro do prédio.”</p>
-            <cite>02:19:08 — QUINA</cite>
-          </blockquote>
-          <div className={styles.evidenceGrid}>
-            <EvidencePlaceholder label="PORTA VERMELHA IMPECÁVEL" description="Placeholder do contraste entre a porta perfeita e o corredor deteriorado da central." />
-            <EvidencePlaceholder label="ESPAÇO NÃO EUCLIDIANO / VISÃO PARCIAL" description="Placeholder da profundidade impossível além da porta. A natureza do espaço permanece indeterminada." />
-          </div>
-        </section>
-      )}
-
-      {isStageVisible(step, REVEAL_STAGES.closure) && (
-        <section className={`${styles.revealSection} ${styles.containmentReport}`} aria-labelledby="eco-closure-title">
-          <p className={styles.protocol}>RELATÓRIO DE CONTENÇÃO / ACESSO NEGADO</p>
-          <h2 id="eco-closure-title">A porta se fechou</h2>
-          <p>Quina atravessou. A porta se fechou onze segundos após a passagem do agente e o sinal foi perdido.</p>
-          <p className={styles.signalStatus}>02:19:19 — SINAL PERDIDO</p>
-          <p>Quando a equipe de contenção alcançou o corredor, havia apenas a parede registrada nas fotos de Jonas. Nenhuma abertura foi localizada e a planta voltou a corresponder ao edifício.</p>
-          <p>Quina não respondeu às tentativas de contato e permanece desaparecido.</p>
-        </section>
-      )}
-
-      {isStageVisible(step, REVEAL_STAGES.evidence) && (
-        <section className={`${styles.revealSection} ${styles.evidence}`} aria-labelledby="eco-external-evidence-title">
-          <div className={styles.evidenceHeading}>
-            <p className={styles.protocol}>NOVA EVIDÊNCIA / CÂMERA EXTERNA / 02h31</p>
-            <h2 id="eco-external-evidence-title">Movimento sem entrada correspondente</h2>
-            <p>Às 02h31, a câmera externa registrou uma figura deixando o edifício. Nenhuma entrada anterior correspondente foi registrada.</p>
-            <p>A figura aparentemente carregava uma peça de roupa semelhante a um item associado a Lia Martins. A imagem não permite confirmar a correspondência.</p>
-          </div>
-          <div className={styles.evidenceGrid}>
-            <EvidencePlaceholder label="FRAME DA CÂMERA EXTERNA" description="A imagem final ainda depende de liberação para publicação." />
-            <EvidencePlaceholder label="SILHUETA / PEÇA DE ROUPA" description="A figura não pode ser identificada. Uma peça de roupa parece corresponder a item associado a Lia Martins." />
-          </div>
-          <p className={styles.ambiguousNote}>
-            O registro não confirma que a figura seja Lia, que Quina tenha retornado ou que qualquer entidade tenha deixado o local.
-          </p>
-        </section>
-      )}
-
-      {isStageVisible(step, REVEAL_STAGES.reclassification) && (
-        <section ref={conclusionRef} className={`${styles.revealSection} ${styles.caseConclusion}`} aria-labelledby="eco-reclassification-title">
-          <p className={styles.protocol}>RECLASSIFICAÇÃO OPERACIONAL</p>
-          <h2 id="eco-reclassification-title">INCIDENTE ECO-SP-001: RECLASSIFICADO</h2>
-          <dl className={styles.classificationGrid}>
-            <div><dt>Agente Quina</dt><dd>DESAPARECIDO</dd></div>
-            <div><dt>Status de contenção</dt><dd>FALHA</dd></div>
-            <div><dt>Avaliação atual</dt><dd>AMEAÇA NÃO CONTIDA</dd></div>
-          </dl>
-          <p>O registro gratuito termina sem determinar quem deixou o edifício, o que permaneceu do outro lado ou o destino dos envolvidos.</p>
-        </section>
-      )}
-
-      {isStageVisible(step, REVEAL_STAGES.restricted) && (
-        <section className={`${styles.revealSection} ${styles.restrictedAccess}`} aria-labelledby="eco-restricted-title">
-          <p className={styles.protocol}>MATERIAL RESTRITO / EDIÇÃO EM DESENVOLVIMENTO</p>
-          <h2 id="eco-restricted-title">Acesso ao dossiê completo</h2>
-          <p>O material gratuito termina neste ponto. Os registros seguintes permanecem restritos a agentes autorizados.</p>
-          <p>A edição em desenvolvimento prevê:</p>
-          <ul className={styles.restrictedContents}>
-            <li>transmissão completa do agente Quina;</li>
-            <li>imagens do espaço além da porta;</li>
-            <li>comparação integral dos registros de Jonas e Quina;</li>
-            <li>relatório sobre a figura registrada na saída;</li>
-            <li>novos dados sobre Lia e a conclusão da investigação do desaparecimento de Jonas;</li>
-            <li>tentativa de contenção da E.C.O.;</li>
-            <li>materiais físicos previstos para a edição.</li>
-          </ul>
-          <p className={styles.provisionalNote}>Conteúdo e materiais sujeitos à conclusão editorial e à viabilização do lote fundador.</p>
-        </section>
-      )}
-
-      {isStageVisible(step, REVEAL_STAGES.offer) && (
-        <section ref={offerRef} className={`${styles.revealSection} ${styles.invitation}`} aria-labelledby="eco-invitation-title">
-          <div className={styles.invitationIntro}>
-            <p className={styles.protocol}>AUTORIZAÇÃO DE CONTINUIDADE</p>
-            <h2 id="eco-invitation-title">Continuar a investigação</h2>
-            <p>Você está solicitando participação no lote fundador do próximo dossiê físico E.C.O., atualmente em desenvolvimento.</p>
-          </div>
-          <div className={styles.offer} aria-labelledby="eco-founder-offer-title">
-            <p className={styles.protocol}>PRÓXIMO CASO E.C.O. / LOTE FUNDADOR</p>
-            <h3 id="eco-founder-offer-title">Dossiê físico com documentos, evidências e investigação inédita</h3>
+            <p className={styles.liberulaEyebrow}>FORA DO ARQUIVO E.C.O.</p>
+            <h2 id="liberula-note-title">UMA NOTA DA LIBERULA</h2>
+            <p>Você chegou ao fim do caso introdutório da E.C.O.</p>
+            <p>Esta é uma experiência narrativa independente criada pela Liberula.</p>
+            <p>Produzir uma investigação completa exige semanas de roteiro, arte, desenvolvimento e testes. Por isso, a próxima missão só será criada se pelo menos 100 pessoas reservarem acesso.</p>
+            <p>A próxima missão será uma experiência digital inédita, com documentos, fotografias, registros interativos, sistema de pistas, conclusão verificável e epílogo completo.</p>
             <FounderProgress phase={campaignPhase} campaign={campaign} />
-            <strong className={styles.price}>R$ 79,90</strong>
-            <dl className={styles.offerFacts}>
-              <div><dt>Formato</dt><dd>Dossiê físico; não inclui edição digital integral. Apoios pontuais poderão ser digitais</dd></div>
-              <div><dt>Meta de produção</dt><dd>100 investigadores</dd></div>
-              <div><dt>Encerramento</dt><dd><time dateTime="2026-08-31">31/08/2026</time></dd></div>
-              <div><dt>Entrega estimada</dt><dd>15 dias após a confirmação da produção</dd></div>
-              <div><dt>Se a meta não for atingida</dt><dd>A produção será cancelada e os valores pagos serão devolvidos integralmente pelo meio original</dd></div>
-              <div><dt>Devolução</dt><dd>Direito de arrependimento em até 7 dias da contratação ou do recebimento, conforme aplicável, com restituição integral</dd></div>
+            <dl className={styles.digitalCampaignFacts}>
+              <div><dt>Preço fundador</dt><dd>R$ 49,90</dd></div>
+              <div><dt>Meta</dt><dd>100 participantes</dd></div>
+              <div><dt>Prazo de entrega</dt><dd>Até 90 dias após a meta ser atingida</dd></div>
+              <div><dt>Se a meta não for atingida</dt><dd>Reembolso integral</dd></div>
             </dl>
-          </div>
+            <p className={styles.transparentCampaignNote}><strong>A próxima história ainda não foi anunciada.</strong> A reserva financia sua criação.</p>
 
-          {campaign?.status === "closed" ? (
-            <div className={styles.campaignClosed}>
-              <strong>LOTE FUNDADOR ENCERRADO</strong>
-              <p>{campaign.goalReached ? "A meta de produção foi atingida." : "A campanha foi encerrada sem confirmação da meta de produção."}</p>
-            </div>
-          ) : (
-            <>
-              <Link
-                className={styles.offerCta}
-                href={buildPurchasePath(referralCode)}
-                onClick={() => {
-                  captureStageOnce("eco_case_offer_cta_clicked");
-                  safePosthogCapture("eco_purchase_cta_clicked", {
-                    case_id: "eco-sp-001",
-                    campaign_state: campaign?.status ?? "unknown",
-                    has_referral: Boolean(referralCode),
-                  });
-                }}
-              >
-                CONTINUAR A INVESTIGAÇÃO <FiArrowRight aria-hidden="true" />
-              </Link>
-              <ShareControls
-                variant={campaignPhase === "ready" && campaign ? campaign.goalReached ? "goal_reached" : "collecting" : "unknown"}
-                campaignState={campaign?.status ?? null}
-              />
-            </>
-          )}
-        </section>
+            {campaign?.status === "closed" ? (
+              <div className={styles.campaignClosed}>
+                <strong>CAMPANHA ENCERRADA</strong>
+                <p>{campaign.goalReached ? "A meta foi atingida e a próxima missão foi autorizada." : "A meta não foi atingida; os valores pagos serão reembolsados integralmente."}</p>
+              </div>
+            ) : (
+              <>
+                <Link
+                  className={styles.liberulaCta}
+                  href={buildPurchasePath(referralCode)}
+                  onClick={() => {
+                    captureOnce("eco_case_financing_clicked", {
+                      campaign_state: campaign?.status ?? "unknown",
+                      has_referral: Boolean(referralCode),
+                    });
+                    captureOnce("eco_case_offer_cta_clicked");
+                    safePosthogCapture("eco_purchase_cta_clicked", {
+                      case_id: "eco-sp-001",
+                      campaign_state: campaign?.status ?? "unknown",
+                      has_referral: Boolean(referralCode),
+                    });
+                  }}
+                >
+                  FINANCIAR A PRÓXIMA MISSÃO <FiArrowRight aria-hidden="true" />
+                </Link>
+                <ShareControls
+                  variant={campaignPhase === "ready" && campaign ? campaign.goalReached ? "goal_reached" : "collecting" : "unknown"}
+                  campaignState={campaign?.status ?? null}
+                />
+              </>
+            )}
+
+            {ECO_INSTAGRAM_URL && (
+              <a className={styles.instagramLink} href={ECO_INSTAGRAM_URL} target="_blank" rel="noopener noreferrer">
+                <FiInstagram aria-hidden="true" /> Acompanhar a comunidade E.C.O. no Instagram
+              </a>
+            )}
+          </section>
+        </>
       )}
     </section>
   );

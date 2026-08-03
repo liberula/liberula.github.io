@@ -38,9 +38,9 @@ export default function ShareControls({
 
   const content = variant === "collecting"
     ? {
-      title: "Ajude a confirmar o lote",
+      title: "Ajude a autorizar a missão",
       description:
-        "A produção começa quando 100 investigadores confirmarem participação.",
+        "A criação começa quando 100 participantes reservarem acesso.",
       invitation:
         "Envie o caso para alguém que também gostaria de investigar.",
     }
@@ -54,16 +54,16 @@ export default function ShareControls({
     : variant === "goal_reached"
     ? {
       title: "Convide outro investigador",
-      description: "A produção já está confirmada.",
+      description: "A próxima missão já foi autorizada.",
       invitation:
-        "Novos investigadores ainda podem integrar o lote fundador enquanto as inscrições estiverem abertas.",
+        "Novos participantes ainda podem garantir acesso fundador enquanto a campanha estiver aberta.",
     }
     : variant === "personal_paid"
     ? {
       title: "Convide outro investigador",
-      description: "Sua participação no lote fundador foi confirmada.",
+      description: "Seu acesso fundador à próxima missão digital foi confirmado.",
       invitation:
-        "Compartilhe seu link com alguém que também gostaria de receber o próximo dossiê.",
+        "Compartilhe seu link com alguém que também gostaria de jogar a próxima missão digital.",
     }
     : {
       title: "Convide outro investigador",

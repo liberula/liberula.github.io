@@ -8,6 +8,12 @@ import { buildValidationEndpoint } from "./eco-api-contract.mjs";
 import styles from "./EcoCase.module.css";
 
 const ECO_API_BASE_URL = process.env.NEXT_PUBLIC_ECO_API_BASE_URL;
+const HINT_STORAGE_KEY = "eco-sp-001:hint-level";
+const HINTS = [
+  "Compare os pontos intermediários registrados em cada uma das três ocorrências.",
+  "No mapa, observe a direção seguida por cada rota depois do último ponto confirmado.",
+  "As três rotas convergem na região da Sé, próximas à Rua Benjamin Constant.",
+] as const;
 
 type SubmissionState =
   | "initial"
@@ -38,11 +44,36 @@ export default function CaseAnswerForm({
   const [answer, setAnswer] = useState("");
   const [state, setState] = useState<SubmissionState>("initial");
   const [fieldError, setFieldError] = useState("");
+  const [hintLevel, setHintLevel] = useState(0);
+  const [confirmingHint, setConfirmingHint] = useState(false);
   const submittingRef = useRef(false);
 
   useEffect(() => {
     safePosthogCapture("eco_case_view", { case_id: "eco-sp-001" });
+    try {
+      const stored = Number(window.sessionStorage.getItem(HINT_STORAGE_KEY));
+      if (Number.isInteger(stored) && stored >= 1 && stored <= HINTS.length) {
+        setHintLevel(stored);
+      }
+    } catch {
+      // Hints remain available without browser storage.
+    }
   }, []);
+
+  function revealNextHint() {
+    const nextLevel = Math.min(hintLevel + 1, HINTS.length);
+    setHintLevel(nextLevel);
+    setConfirmingHint(false);
+    try {
+      window.sessionStorage.setItem(HINT_STORAGE_KEY, String(nextLevel));
+    } catch {
+      // Component state preserves progress for the current visit.
+    }
+    safePosthogCapture("eco_case_hint_used", {
+      case_id: "eco-sp-001",
+      hint_level: nextLevel,
+    });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -123,8 +154,7 @@ export default function CaseAnswerForm({
       <p className={styles.protocol}>FORMULÁRIO DE CONCLUSÃO</p>
       <h2 id="eco-answer-title">Identifique o local investigado</h2>
       <p className={styles.formIntro}>
-        Registre o nome completo do estabelecimento indicado pelas evidências do
-        caso.
+        Registre o nome ou endereço do local indicado pelas evidências.
       </p>
 
       <form className={styles.form} onSubmit={handleSubmit} noValidate>
@@ -195,6 +225,33 @@ export default function CaseAnswerForm({
           )}
         </div>
       </form>
+
+      <aside className={styles.hintPanel} aria-labelledby="eco-hints-title">
+        <p className={styles.protocol}>ORIENTAÇÃO OPCIONAL</p>
+        <h3 id="eco-hints-title">Precisa de uma direção?</h3>
+        <p>As pistas são progressivas e não são necessárias para concluir o caso.</p>
+        {hintLevel > 0 && (
+          <ol className={styles.hintList} aria-live="polite">
+            {HINTS.slice(0, hintLevel).map((hint, index) => (
+              <li key={hint}><strong>PISTA {index + 1}</strong><span>{hint}</span></li>
+            ))}
+          </ol>
+        )}
+        {hintLevel < HINTS.length && !confirmingHint && (
+          <button className={styles.hintButton} type="button" onClick={() => setConfirmingHint(true)}>
+            {hintLevel === 0 ? "SOLICITAR ORIENTAÇÃO" : "SOLICITAR PRÓXIMA ORIENTAÇÃO"}
+          </button>
+        )}
+        {confirmingHint && (
+          <div className={styles.hintConfirmation} role="group" aria-label={`Confirmar pista ${hintLevel + 1}`}>
+            <p>Revelar a pista {hintLevel + 1}?</p>
+            <div>
+              <button type="button" onClick={revealNextHint}>REVELAR PISTA</button>
+              <button type="button" onClick={() => setConfirmingHint(false)}>CANCELAR</button>
+            </div>
+          </div>
+        )}
+      </aside>
     </section>
   );
 }

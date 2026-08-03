@@ -1,5 +1,4 @@
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const STATE_PATTERN = /^[A-Za-z]{2}$/;
 
 function normalizeText(value) {
   return String(value ?? "").trim().replace(/\s+/gu, " ");
@@ -41,31 +40,6 @@ export function validateBuyerInput(input) {
     errors.whatsapp = "Informe um WhatsApp com DDD ou código do país.";
   }
 
-  const street = requiredText(input.street, "Logradouro", 160);
-  if (street.error) errors.street = street.error;
-
-  const number = requiredText(input.number, "Número", 20);
-  if (number.error) errors.number = number.error;
-
-  const complement = normalizeText(input.complement);
-  if (complement.length > 80) {
-    errors.complement = "Complemento deve ter no máximo 80 caracteres.";
-  }
-
-  const neighborhood = requiredText(input.neighborhood, "Bairro", 100);
-  if (neighborhood.error) errors.neighborhood = neighborhood.error;
-
-  const city = requiredText(input.city, "Cidade", 100);
-  if (city.error) errors.city = city.error;
-
-  const state = normalizeText(input.state).toLocaleUpperCase("pt-BR");
-  if (!state) errors.state = "UF é obrigatória.";
-  else if (!STATE_PATTERN.test(state)) errors.state = "Informe uma UF válida.";
-
-  const postalCode = digitsOnly(input.postalCode);
-  if (!postalCode) errors.postalCode = "CEP é obrigatório.";
-  else if (postalCode.length !== 8) errors.postalCode = "Informe um CEP válido.";
-
   if (Object.keys(errors).length > 0) {
     return { errors, payload: null };
   }
@@ -76,15 +50,6 @@ export function validateBuyerInput(input) {
       name: name.value,
       email,
       whatsapp,
-      address: {
-        street: street.value,
-        number: number.value,
-        complement,
-        neighborhood: neighborhood.value,
-        city: city.value,
-        state,
-        postalCode,
-      },
     },
   };
 }

@@ -49,7 +49,7 @@ function payment(
     collectorId: COLLECTOR_ID,
     externalReference: EXTERNAL_REFERENCE,
     currency: "BRL",
-    amount: 79.90,
+    amount: 49.90,
     status: "approved",
     updatedAt: "2026-07-29T12:00:00.000Z",
     ...patch,
@@ -71,7 +71,7 @@ class MemoryProvider implements PaymentProvider {
 class MemoryRepository implements PaymentRepository {
   order: StoredOrder | null = {
     caseId: "eco-sp-001",
-    amountCents: 7990,
+    amountCents: 4990,
     currency: "BRL",
     externalReference: EXTERNAL_REFERENCE,
     providerPaymentId: null,
@@ -345,8 +345,8 @@ const paymentMismatchCases: Array<[string, Partial<AuthoritativePayment>]> = [
   ["signed resource", { id: "999" }],
   ["external reference", { externalReference: "invalid" }],
   ["currency", { currency: "USD" }],
-  ["amount", { amount: 79.91 }],
-  ["fractional-cent amount", { amount: 79.904 }],
+  ["amount", { amount: 49.91 }],
+  ["fractional-cent amount", { amount: 49.904 }],
   ["unsupported status", { status: "charged_back" }],
   ["provider timestamp", { updatedAt: "not-a-date" }],
 ];

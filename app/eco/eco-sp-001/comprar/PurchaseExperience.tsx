@@ -119,7 +119,7 @@ export default function PurchaseExperience() {
     return (
       <div className={styles.purchaseStatus}>
         <h1 ref={pageHeadingRef} tabIndex={-1} className={styles.visuallyHidden}>
-          Status da participação no lote fundador
+          Status da reserva da próxima missão digital
         </h1>
         <PaymentStatusView />
         <p className={styles.statusSecurityNote}>
@@ -151,13 +151,13 @@ export default function PurchaseExperience() {
   return (
     <>
       <section className={styles.purchaseIntro}>
-        <p className={styles.protocol}>AUTORIZAÇÃO DE CONTINUIDADE / LOTE FUNDADOR</p>
+        <p className={styles.protocol}>FINANCIAMENTO COLETIVO / ACESSO FUNDADOR</p>
         <h1 ref={pageHeadingRef} tabIndex={-1}>
-          Continuar a investigação
+          Próxima missão digital da E.C.O.
         </h1>
         <p>
-          Solicitação de um novo dossiê físico E.C.O., em desenvolvimento, com
-          documentos, evidências e uma investigação inédita.
+          Uma investigação digital inédita da E.C.O., criada do zero após a
+          confirmação da campanha.
         </p>
       </section>
 
@@ -165,17 +165,25 @@ export default function PurchaseExperience() {
         className={styles.purchaseSummary}
         aria-labelledby="eco-purchase-summary"
       >
-        <h2 id="eco-purchase-summary">Próximo Caso E.C.O.</h2>
+        <h2 id="eco-purchase-summary">Reserva de acesso fundador</h2>
         <FounderProgress phase={campaignPhase} campaign={campaign} />
-        <strong className={styles.price}>R$ 79,90</strong>
+        <strong className={styles.price}>R$ 49,90</strong>
         <dl className={styles.offerFacts}>
           <div>
             <dt>Formato</dt>
-            <dd>Dossiê físico; não inclui edição digital integral. Apoios pontuais poderão ser digitais</dd>
+            <dd>Experiência exclusivamente digital, com acesso online e nenhuma impressão necessária</dd>
           </div>
           <div>
-            <dt>Meta de produção</dt>
-            <dd>100 investigadores</dd>
+            <dt>Conteúdo previsto</dt>
+            <dd>Documentos, fotografias, registros interativos, sistema de pistas, conclusão verificável e epílogo completo</dd>
+          </div>
+          <div>
+            <dt>Duração estimada</dt>
+            <dd>60 a 120 minutos</dd>
+          </div>
+          <div>
+            <dt>Meta</dt>
+            <dd>100 participantes</dd>
           </div>
           <div>
             <dt>Encerramento</dt>
@@ -184,12 +192,12 @@ export default function PurchaseExperience() {
             </dd>
           </div>
           <div>
-            <dt>Entrega estimada</dt>
-            <dd>15 dias após a confirmação da produção</dd>
+            <dt>Prazo de entrega</dt>
+            <dd>Até 90 dias após a meta ser atingida</dd>
           </div>
           <div>
             <dt>Se a meta não for atingida</dt>
-            <dd>A produção será cancelada e os valores pagos serão devolvidos integralmente pelo meio original</dd>
+            <dd>Reembolso integral: a missão não será produzida e os valores pagos serão devolvidos pelo meio original</dd>
           </div>
           <div>
             <dt>Devolução</dt>
@@ -197,18 +205,18 @@ export default function PurchaseExperience() {
           </div>
         </dl>
         <p className={styles.provisionalNote}>
-          A edição permanece em desenvolvimento. Conteúdo e materiais físicos
-          podem receber ajustes editoriais antes da confirmação da produção.
+          A próxima história ainda não foi anunciada. A reserva financia sua
+          criação e não representa a compra de uma missão já concluída.
         </p>
       </section>
 
       {closed ? (
         <section className={styles.campaignClosed}>
-          <strong>LOTE FUNDADOR ENCERRADO</strong>
+          <strong>CAMPANHA ENCERRADA</strong>
           <p>
             {campaign.goalReached
-              ? "A meta de produção foi atingida."
-              : "A campanha foi encerrada sem confirmação da meta de produção."}
+              ? "A meta foi atingida e a próxima missão foi autorizada."
+              : "A meta não foi atingida; os valores pagos serão reembolsados integralmente."}
           </p>
         </section>
       ) : (

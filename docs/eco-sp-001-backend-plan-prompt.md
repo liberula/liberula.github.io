@@ -23,7 +23,7 @@ Use the following prompt to start the later backend plan:
 >    canonical answer in the client bundle.
 > 2. A minimal Supabase order migration and
 >    `POST /api/eco/eco-sp-001/orders`, defining case `eco-sp-001`, amount
->    `7990` cents, currency `BRL`, product identity, and initial `pending` state
+>    `4990` cents, currency `BRL`, digital product identity, and initial `pending` state
 >    exclusively on the server. Create Mercado Pago Checkout Pro preferences
 >    with sandbox credentials, external-reference linkage, return URLs, and
 >    database-backed idempotency.

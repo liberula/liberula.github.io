@@ -20,11 +20,11 @@ const buyerForm = await readFile(
 );
 const normalizedReveal = reveal.replace(/\s+/g, " ");
 
-test("progress appears after the final evidence and commercial invitation", () => {
-  const evidence = reveal.indexOf("NOVA EVIDÊNCIA / CÂMERA EXTERNA");
-  const invitation = reveal.indexOf("AUTORIZAÇÃO DE CONTINUIDADE");
+test("progress appears in the Liberula note after the operational report", () => {
+  const evidence = reveal.indexOf("SITUAÇÃO ATUAL");
+  const invitation = reveal.indexOf("UMA NOTA DA LIBERULA");
   const progress = reveal.indexOf("<FounderProgress");
-  const price = reveal.indexOf("R$ 79,90");
+  const price = reveal.indexOf("R$ 49,90");
   assert.ok(evidence < invitation);
   assert.ok(invitation < progress);
   assert.ok(progress < price);
@@ -41,11 +41,11 @@ test("loading and failure never render a false zero", async () => {
 
 test("collecting, reached, and closed presentations stay distinct", () => {
   assert.match(reveal, /campaign\?\.status === "closed" \? \(/);
-  assert.match(normalizedReveal, /LOTE FUNDADOR ENCERRADO/);
+  assert.match(normalizedReveal, /CAMPANHA ENCERRADA/);
 });
 
 test("sharing is below the primary CTA and remains secondary", () => {
-  assert.ok(reveal.indexOf("offerCta") < reveal.indexOf("<ShareControls"));
+  assert.ok(reveal.indexOf("liberulaCta") < reveal.indexOf("<ShareControls"));
   assert.match(sharing, /ECO_CASE_URL/);
   assert.match(sharing, /ENVIAR PELO WHATSAPP/);
   assert.match(sharing, /COPIAR LINK/);

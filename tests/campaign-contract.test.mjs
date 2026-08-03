@@ -79,18 +79,18 @@ test("share copy changes at goal and for a paid buyer", () => {
     "personal_paid",
     buildReferralUrl("AB7C09DE12FF"),
   );
-  assert.match(collecting, /chegar a 100 investigadores/);
-  assert.match(reached, /já foi confirmada/);
-  assert.match(personal, /entrei no lote fundador/);
+  assert.match(collecting, /100 participantes/);
+  assert.match(reached, /missão digital já foi autorizada/);
+  assert.match(personal, /acesso fundador/);
   assert.match(
     decodeURIComponent(new URL(buildWhatsAppUrl(reached)).searchParams.get("text")),
-    /produção/,
+    /missão digital/,
   );
 });
 
 test("unknown progress uses neutral share copy", () => {
   const message = buildShareMessage("unknown", ECO_CASE_URL);
-  assert.match(message, /campanha do próximo dossiê físico está em andamento/);
+  assert.match(message, /campanha da próxima missão digital da E\.C\.O\. está em andamento/);
   assert.doesNotMatch(message, /100 investigadores/);
-  assert.doesNotMatch(message, /já foi confirmada/);
+  assert.doesNotMatch(message, /já foi autorizada/);
 });

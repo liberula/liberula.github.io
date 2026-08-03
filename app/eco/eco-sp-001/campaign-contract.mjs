@@ -79,7 +79,7 @@ export function buildShareMessage(variant, url) {
     return [
       "Terminei o primeiro caso da E.C.O.",
       "",
-      "A campanha do próximo dossiê físico está em andamento.",
+      "A campanha da próxima missão digital da E.C.O. está em andamento.",
       "",
       "Veja o caso:",
       url,
@@ -89,7 +89,7 @@ export function buildShareMessage(variant, url) {
     return [
       "Terminei o primeiro caso da E.C.O.",
       "",
-      "A produção do próximo dossiê físico já foi confirmada, e ainda dá para participar do lote fundador.",
+      "A próxima missão digital já foi autorizada, e ainda dá para garantir acesso fundador.",
       "",
       "Veja o caso:",
       url,
@@ -97,7 +97,7 @@ export function buildShareMessage(variant, url) {
   }
   if (variant === "personal_paid") {
     return [
-      "Terminei o primeiro caso da E.C.O. e entrei no lote fundador do próximo dossiê físico.",
+      "Terminei o primeiro caso da E.C.O. e garanti acesso fundador à próxima missão digital.",
       "",
       "Acho que você vai gostar da investigação:",
       url,
@@ -105,7 +105,7 @@ export function buildShareMessage(variant, url) {
   }
   if (variant === "personal_pending") {
     return [
-      "Terminei o primeiro caso da E.C.O. e iniciei minha participação no lote fundador.",
+      "Terminei o primeiro caso da E.C.O. e iniciei minha reserva de acesso fundador.",
       "",
       "Acho que você vai gostar da investigação:",
       url,
@@ -114,7 +114,7 @@ export function buildShareMessage(variant, url) {
   return [
     "Terminei o primeiro caso da E.C.O.",
     "",
-    "O próximo dossiê será físico e o lote precisa chegar a 100 investigadores para confirmar a produção.",
+    "A próxima missão será digital e precisa chegar a 100 participantes para ser criada.",
     "",
     "Veja o caso:",
     url,

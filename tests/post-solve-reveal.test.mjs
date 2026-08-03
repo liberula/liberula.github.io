@@ -3,205 +3,152 @@ import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 import {
-  getRevealDelay,
-  getUnlockStatus,
-  isStageVisible,
-  REVEAL_STAGES,
-  UNLOCK_STATUSES,
+  getReportReleaseDelay,
+  REPORT_RELEASE_DELAY_MS,
 } from "../app/eco/eco-sp-001/reveal-timeline.mjs";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const revealSource = await read("app/eco/eco-sp-001/PostSolveReveal.tsx");
-const answerSource = await read("app/eco/eco-sp-001/CaseAnswerForm.tsx");
-const experienceSource = await read("app/eco/eco-sp-001/EcoCaseExperience.tsx");
-const pageSource = await read("app/eco/eco-sp-001/page.tsx");
-const apiSource = await read("supabase/functions/eco-sp-001-api/index.ts");
-const purchaseSource = await read("app/eco/eco-sp-001/comprar/PurchaseExperience.tsx");
-const revealText = revealSource.replace(/\s+/g, " ");
+const reveal = await read("app/eco/eco-sp-001/PostSolveReveal.tsx");
+const answer = await read("app/eco/eco-sp-001/CaseAnswerForm.tsx");
+const experience = await read("app/eco/eco-sp-001/EcoCaseExperience.tsx");
+const purchase = await read("app/eco/eco-sp-001/comprar/PurchaseExperience.tsx");
+const css = await read("app/eco/eco-sp-001/EcoCase.module.css");
+const normalized = reveal.replace(/\s+/g, " ");
 
-test("incorrect answers keep the current attempt flow and reveal nothing", () => {
-  assert.match(answerSource, /if \(result\.correct\)/);
-  assert.match(answerSource, /else \{\s*setState\("incorrect"\)/);
-  assert.match(answerSource, /onCorrect\(\)/);
-  assert.match(experienceSource, /if \(solved\)/);
-  assert.match(experienceSource, /<CaseAnswerForm onCorrect=/);
-  assert.match(pageSource, /<EcoCaseExperience \/>/);
-  assert.doesNotMatch(answerSource, /Quina|porta vermelha|R\$ 79,90/);
+test("correct answers release one operational report after a short transition", () => {
+  assert.match(answer, /if \(result\.correct\)/);
+  assert.match(answer, /onCorrect\(\)/);
+  assert.match(experience, /if \(solved\)/);
+  assert.match(reveal, /<article className=\{styles\.reportDocument\}/);
+  assert.equal((reveal.match(/className=\{styles\.reportDocument\}/g) ?? []).length, 1);
+  assert.equal(REPORT_RELEASE_DELAY_MS, 420);
+  assert.equal(getReportReleaseDelay(true), 0);
+  assert.ok(getReportReleaseDelay(false) < 1000);
+  assert.doesNotMatch(reveal, /REVEAL_STAGES|LAST_REVEAL_STEP|isStageVisible/);
 });
 
-test("backend decides correctness and the client reveals the location only after correct", () => {
-  assert.match(apiSource, /return json\(200, \{ correct \}, origin\)/);
-  assert.doesNotMatch(answerSource, /parseCaseResolution|invalid_resolution|result\.resolution/);
-  assert.match(experienceSource, /if \(solved\)/);
-  assert.match(revealSource, /Rua Benjamin Constant, 200/);
-  assert.match(revealSource, /Sé — São Paulo/);
-  assert.doesNotMatch(answerSource, /Benjamin Constant|Rua Benjamin|Sé — São Paulo/);
+test("confirmation is brief and authorizes the report", () => {
+  for (const copy of [
+    "LOCAL IDENTIFICADO",
+    "Rua Benjamin Constant, 200",
+    "Sé, São Paulo",
+    "A conclusão foi incorporada ao registro ECO-SP-001",
+    "Um relatório posterior à avaliação foi autorizado para consulta",
+  ]) assert.ok(normalized.includes(copy), copy);
 });
 
-test("unlock and narrative stages are progressive with short reduced-motion waits", () => {
-  assert.deepEqual(UNLOCK_STATUSES, [
-    "CONCLUSÃO RECEBIDA",
-    "CRUZANDO REGISTROS",
-    "LOCAL CONFIRMADO",
-    "ABRINDO ATUALIZAÇÃO OPERACIONAL",
-  ]);
-  assert.equal(getUnlockStatus(0), UNLOCK_STATUSES[0]);
-  assert.equal(getUnlockStatus(99), UNLOCK_STATUSES.at(-1));
-  const order = [
-    REVEAL_STAGES.operation,
-    REVEAL_STAGES.interior,
-    REVEAL_STAGES.comparison,
-    REVEAL_STAGES.transmission,
-    REVEAL_STAGES.impossibleSpace,
-    REVEAL_STAGES.closure,
-    REVEAL_STAGES.evidence,
-    REVEAL_STAGES.reclassification,
-    REVEAL_STAGES.restricted,
-    REVEAL_STAGES.offer,
-  ];
-  assert.ok(order.every((stage, index) => index === 0 || stage > order[index - 1]));
-  assert.equal(isStageVisible(REVEAL_STAGES.reclassification, REVEAL_STAGES.offer), false);
-  for (let step = 0; step < REVEAL_STAGES.offer; step += 1) {
-    assert.ok(getRevealDelay(step, true) < getRevealDelay(step, false));
-    assert.ok(getRevealDelay(step, true) <= 30);
+test("report header and operational metadata are complete", () => {
+  for (const copy of [
+    "RELATÓRIO DE RECONHECIMENTO OPERACIONAL",
+    "ECO-SP-001",
+    "Inspeção do ponto de convergência",
+    "Agente de campo",
+    "Contato interrompido",
+    "Restrito",
+  ]) assert.ok(normalized.includes(copy), copy);
+});
+
+test("core Quina dialogue and anomaly discovery are preserved", () => {
+  for (const copy of [
+    "Só a decoração, até agora.",
+    "Sempre mantenho.",
+    "Tem alguma coisa muito errada aqui.",
+    "A porta do escritório está levando para um lugar que não está dentro do prédio.",
+    "Isso é incrível.",
+    "Eu preciso abrir essa porta.",
+    "Eu acho que isso sabia que eu estava aqui.",
+  ]) assert.ok(normalized.includes(copy), copy);
+});
+
+test("the anomaly remains confirmed and isolated after Quina disappears", () => {
+  for (const copy of [
+    "confirmou a presença da anomalia de acesso",
+    "O agente não foi encontrado",
+    "O ponto foi isolado pela E.C.O. e permanece sob monitoramento",
+    "O agente Quina permanece desaparecido",
+    "segue sob monitoramento contínuo",
+  ]) assert.ok(normalized.includes(copy), copy);
+  assert.doesNotMatch(reveal, /havia apenas (uma|a) parede|anomalia desapareceu/iu);
+});
+
+test("final states are operational, not gamified", () => {
+  for (const [label, state] of [
+    ["ENCONTRAR", "concluído"],
+    ["CONTER", "em andamento"],
+    ["OCULTAR", "ativo"],
+  ]) {
+    assert.match(normalized, new RegExp(`<dt>${label}</dt><dd>${state}</dd>`));
   }
+  assert.match(css, /\.operationalStates/);
 });
 
-test("Quina physically enters the real central building and confirms it", () => {
-  for (const copy of [
-    "Após a confirmação do ponto final das rotas, o agente Quina foi enviado ao local",
-    "entrada física ocorreu às 02h17 por um acesso de serviço",
-    "estava na central real",
-    "sequência de pontos intermediários",
-    "central no fim da rota",
-    "tinta descascando",
-    "piso antigo",
-    "salas desocupadas",
-    "toda a central fosse um espaço sobrenatural",
-  ]) assert.ok(revealText.includes(copy), copy);
-});
-
-test("Jonas and Quina records show the same point without and with the red door", () => {
-  for (const copy of [
-    "mesmo corredor, paredes, elementos laterais e perspectiva",
-    "recuo, as marcas de batente",
-    "não havia porta",
-    "REGISTRO DE JONAS / SEM PORTA",
-    "REGISTRO DE QUINA / PORTA VERMELHA",
-    "Mesmo enquadramento",
-    "porta vermelha ocupa exatamente o ponto vazio",
-  ]) assert.ok(revealText.includes(copy), copy);
-});
-
-test("the immaculate red door opens to a non-Euclidean space", () => {
-  for (const copy of [
-    "vermelha, impecável, limpa e sem poeira, riscos ou desgaste",
-    "nova demais",
-    "profundidade maior que o edifício",
-    "portas repetidas",
-    "ângulos incoerentes",
-    "luz sem fonte",
-    "Isso não cabe dentro do prédio",
-    "ESPAÇO NÃO EUCLIDIANO / VISÃO PARCIAL",
-  ]) assert.ok(revealText.includes(copy), copy);
-  assert.doesNotMatch(revealSource, /origem do espaço|natureza da porta é/iu);
-});
-
-test("Quina crosses, contact is lost, the door closes, and Jonas's wall returns", () => {
-  for (const copy of [
-    "02:17:42",
-    "confirme o ponto registrado por Valença",
-    "Valença não registrou nenhuma porta",
-    "abrindo",
-    "Quina atravessou",
-    "sinal foi perdido",
-    "A porta se fechou onze segundos após a passagem do agente",
-    "parede registrada nas fotos de Jonas",
-    "permanece desaparecido",
-  ]) assert.ok(revealText.includes(copy), copy);
-  assert.doesNotMatch(revealSource, /<audio|audio controls/i);
-});
-
-test("escape evidence remains explicitly ambiguous", () => {
-  for (const copy of [
-    "câmera externa registrou uma figura deixando o edifício",
-    "Nenhuma entrada anterior correspondente foi registrada",
-    "aparentemente carregava uma peça de roupa",
-    "A figura não pode ser identificada",
-    "parece corresponder a item associado a Lia Martins",
-    "não confirma que a figura seja Lia",
-  ]) assert.ok(revealText.includes(copy), copy);
-  assert.doesNotMatch(revealSource, /Lia está viva|era Lia|criatura escapou|Quina voltou/iu);
-});
-
-test("unfinished visual assets are honest code placeholders", () => {
-  assert.match(revealSource, /data-asset-status="placeholder"/);
-  for (const label of [
-    "INTERIOR DEGRADADO DA CENTRAL",
-    "REGISTRO DE JONAS / SEM PORTA",
-    "REGISTRO DE QUINA / PORTA VERMELHA",
-    "PORTA VERMELHA IMPECÁVEL",
-    "ESPAÇO NÃO EUCLIDIANO / VISÃO PARCIAL",
-    "FRAME DA CÂMERA EXTERNA",
-    "SILHUETA / PEÇA DE ROUPA",
-  ]) assert.ok(revealSource.includes(label), label);
-  assert.match(revealSource, /IMAGEM PENDENTE/);
-});
-
-test("reclassification ends the free story before restricted access and commerce", () => {
-  const reclassification = revealSource.indexOf("INCIDENTE ECO-SP-001: RECLASSIFICADO");
-  const restricted = revealSource.indexOf("Acesso ao dossiê completo");
-  const offer = revealSource.indexOf("AUTORIZAÇÃO DE CONTINUIDADE");
-  const price = revealSource.indexOf("R$ 79,90");
-  assert.ok(reclassification >= 0 && reclassification < restricted);
-  assert.ok(restricted < offer && offer < price);
-  for (const copy of ["DESAPARECIDO", "FALHA", "AMEAÇA NÃO CONTIDA"]) {
-    assert.ok(revealSource.includes(copy), copy);
+test("exactly two honest photo placeholders preserve editorial contracts", () => {
+  assert.equal((reveal.match(/<PhotoPlaceholder/g) ?? []).length, 2);
+  for (const [id, ratio] of [
+    ["eco-sp-001-postsolve-room-threshold", "16:10"],
+    ["eco-sp-001-postsolve-quina-final-record", "16:9"],
+  ]) {
+    assert.ok(reveal.includes(`assetId="${id}"`), id);
+    assert.ok(reveal.includes(`ratio="${ratio}"`), ratio);
   }
-  assert.match(revealSource, /O registro gratuito termina sem determinar/);
+  assert.match(reveal, /data-asset-status="placeholder"/);
+  assert.match(reveal, /data-editorial-description=/);
+  assert.match(reveal, /ANEXO FOTOGRÁFICO PENDENTE/);
 });
 
-test("paid continuation is framed as developing restricted material with a narrative CTA", () => {
-  assert.match(revealSource, /MATERIAL RESTRITO \/ EDIÇÃO EM DESENVOLVIMENTO/);
-  assert.match(revealSource, /Conteúdo e materiais sujeitos à conclusão editorial/);
-  assert.match(revealSource, /CONTINUAR A INVESTIGAÇÃO/);
-  assert.doesNotMatch(revealSource, /COMPRAR AGORA|FINALIZAR PEDIDO|IR PARA O CHECKOUT/);
-  assert.match(revealSource, /href=\{buildPurchasePath\(referralCode\)\}/);
-  assert.doesNotMatch(revealSource, /<BuyerForm/);
+test("Liberula note breaks the fourth wall only after the document", () => {
+  const reportEnd = reveal.indexOf("</article>");
+  const note = reveal.indexOf("UMA NOTA DA LIBERULA");
+  assert.ok(reportEnd >= 0 && reportEnd < note);
+  assert.match(reveal, /\/eco\/liberula-mark\.svg/);
+  assert.match(css, /\.liberulaNote[\s\S]*#f2cb32/);
+  assert.match(reveal, /FORA DO ARQUIVO E\.C\.O\./);
 });
 
-test("price, format, goal, deadline, delivery, failed-goal, and return terms are clear before payment", () => {
-  for (const source of [revealSource, purchaseSource]) {
+test("offer is digital, transparent, and contains no physical promise", () => {
+  for (const source of [reveal, purchase]) {
     for (const copy of [
-      "R$ 79,90",
-      "Dossiê físico",
-      "100 investigadores",
-      "31/08/2026",
-      "15 dias após a confirmação da produção",
-      "produção será cancelada",
-      "devolvidos integralmente",
-      "Direito de arrependimento em até 7 dias",
-    ]) assert.ok(source.includes(copy), copy);
+      "R$ 49,90",
+      "100 participantes",
+      "90 dias após a meta",
+      "reembolso integral",
+      "história ainda não foi anunciada",
+    ]) assert.ok(
+      source.toLocaleLowerCase("pt-BR").includes(copy.toLocaleLowerCase("pt-BR")),
+      copy,
+    );
+  assert.doesNotMatch(source, /dossiê físico|materiais físicos|edição física|apoios pontuais/iu);
   }
+  assert.match(reveal, /FINANCIAR A PRÓXIMA MISSÃO/);
+  assert.match(reveal, /href=\{buildPurchasePath\(referralCode\)\}/);
 });
 
-test("existing and narrative-specific events contain no PII", () => {
+test("hints are progressive, confirmed, session-preserved, and independently tracked", () => {
+  for (const hint of [
+    "Compare os pontos intermediários registrados em cada uma das três ocorrências.",
+    "No mapa, observe a direção seguida por cada rota depois do último ponto confirmado.",
+    "As três rotas convergem na região da Sé, próximas à Rua Benjamin Constant.",
+  ]) assert.ok(answer.includes(hint), hint);
+  assert.match(answer, /HINTS\.slice\(0, hintLevel\)/);
+  assert.match(answer, /confirmingHint/);
+  assert.match(answer, /sessionStorage\.setItem\(HINT_STORAGE_KEY/);
+  assert.match(answer, /eco_case_hint_used/);
+  assert.match(answer, /hint_level: nextLevel/);
+});
+
+test("report, images, ending, note, and financing analytics contain no answer or PII", () => {
   for (const event of [
-    "eco_case_reveal_started",
-    "eco_case_agent_report_viewed",
-    "eco_case_white_room_viewed",
-    "eco_case_quina_log_viewed",
-    "eco_case_red_door_revealed",
-    "eco_case_offer_viewed",
-    "eco_case_offer_cta_clicked",
-    "eco_purchase_cta_clicked",
-    "eco_case_free_ending_completed",
-  ]) assert.ok(revealSource.includes(event), event);
-  assert.match(revealSource, /case_id: "eco-sp-001"/);
-  assert.doesNotMatch(revealSource, /participant_email:|buyer_email:|answer:|location: resolution|region: resolution/);
+    "eco_case_report_released",
+    "eco_case_photo_1_viewed",
+    "eco_case_photo_2_viewed",
+    "eco_case_report_completed",
+    "eco_case_liberula_note_viewed",
+    "eco_case_financing_clicked",
+  ]) assert.ok(reveal.includes(event), event);
+  assert.doesNotMatch(reveal, /answer:|buyer_email:|participant_email:/);
 });
 
-test("the case public directory remains unchanged", async () => {
+test("no new case image asset was added", async () => {
   const assets = await readdir(new URL("../public/eco/eco-sp-001/", import.meta.url));
   assert.deepEqual(assets.sort(), [
     "agent-field-record.png",

@@ -69,8 +69,8 @@ key.
    - integer `amount_cents`;
    - three-character currency;
    - buyer name, normalized email, and normalized WhatsApp;
-   - separate street, number, complement, neighborhood, city, state, and postal
-     code columns;
+   - legacy delivery columns nullable for historical compatibility; new digital
+     orders collect no delivery address;
    - unique idempotency key;
    - nullable unique Mercado Pago preference ID;
    - external reference linked to the internal order;
@@ -78,7 +78,7 @@ key.
    - created, updated, and provider-status timestamps.
 3. Add database checks fixing this product to:
    - `case_id = 'eco-sp-001'`;
-   - `amount_cents = 7990`;
+   - new orders use `amount_cents = 4990`;
    - `currency = 'BRL'`;
    - an allowed status set.
 4. Add uniqueness constraints for the idempotency key, public reference,
@@ -102,7 +102,7 @@ key.
    buyer values.
 6. Define these values as server constants:
    - case ID: `eco-sp-001`;
-   - amount: `7990` cents / `79.90`;
+   - amount: `4990` cents / `49.90`;
    - currency: `BRL`;
    - product title approved by the later backend plan;
    - initial status: `pending`.
@@ -113,8 +113,9 @@ key.
 9. Create the Mercado Pago preference server-side with
    `POST https://api.mercadopago.com/checkout/preferences`, a Bearer sandbox
    access token, and an API idempotency key where supported.
-10. Set one item with quantity `1`, currency `BRL`, and numeric unit price
-    `79.90`. Populate payer/shipping fields only from the validated buyer.
+10. Set one digital item with quantity `1`, currency `BRL`, and numeric unit
+    price `49.90`. Populate only payer contact fields; do not create shipping
+    data for the digital mission.
 11. Set `external_reference` to the internal order identifier or another unique
     immutable value stored on that order.
 12. Configure HTTPS `back_urls` on `liberula.com` for `success`, `pending`, and

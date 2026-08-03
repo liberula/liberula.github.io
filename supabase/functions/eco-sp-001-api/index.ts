@@ -7,7 +7,6 @@ const REFERRAL_CODE_PATTERN = /^[A-F0-9]{12}$/;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const STATE_PATTERN = /^[A-Za-z]{2}$/;
 const SANDBOX_CHECKOUT_HOSTS = new Set([
   "sandbox.mercadopago.com",
   "sandbox.mercadopago.com.br",
@@ -23,9 +22,9 @@ const PRODUCTION_ORIGINS = new Set([
 
 export const ECO_PRODUCT = Object.freeze({
   caseId: "eco-sp-001",
-  title: "Próximo Caso E.C.O. | Lote Fundador",
-  amountCents: 7990,
-  unitPrice: 79.90,
+  title: "Próxima missão digital E.C.O. | Acesso Fundador",
+  amountCents: 4990,
+  unitPrice: 49.90,
   currency: "BRL",
   quantity: 1,
   initialStatus: "pending",
@@ -43,15 +42,6 @@ export type Buyer = {
   name: string;
   email: string;
   whatsapp: string;
-  address: {
-    street: string;
-    number: string;
-    complement: string;
-    neighborhood: string;
-    city: string;
-    state: string;
-    postalCode: string;
-  };
 };
 
 export type OrderRecord = {
@@ -335,17 +325,7 @@ function validateRequiredText(
 export function parseBuyer(value: unknown): Buyer | null {
   if (
     !isPlainObject(value) ||
-    !hasExactKeys(value, ["name", "email", "whatsapp", "address"]) ||
-    !isPlainObject(value.address) ||
-    !hasExactKeys(value.address, [
-      "street",
-      "number",
-      "complement",
-      "neighborhood",
-      "city",
-      "state",
-      "postalCode",
-    ])
+    !hasExactKeys(value, ["name", "email", "whatsapp"])
   ) {
     return null;
   }
@@ -357,39 +337,13 @@ export function parseBuyer(value: unknown): Buyer | null {
   const whatsapp = typeof value.whatsapp === "string"
     ? digitsOnly(value.whatsapp)
     : "";
-  const street = validateRequiredText(value.address.street, 1, 160);
-  const number = validateRequiredText(value.address.number, 1, 20);
-  const complement = typeof value.address.complement === "string"
-    ? normalizeText(value.address.complement)
-    : null;
-  const neighborhood = validateRequiredText(
-    value.address.neighborhood,
-    1,
-    100,
-  );
-  const city = validateRequiredText(value.address.city, 1, 100);
-  const state = typeof value.address.state === "string"
-    ? normalizeText(value.address.state).toLocaleUpperCase("pt-BR")
-    : "";
-  const postalCode = typeof value.address.postalCode === "string"
-    ? digitsOnly(value.address.postalCode)
-    : "";
-
   if (
     !name ||
     !email ||
     email.length > 320 ||
     !EMAIL_PATTERN.test(email) ||
     whatsapp.length < 10 ||
-    whatsapp.length > 15 ||
-    !street ||
-    !number ||
-    complement === null ||
-    complement.length > 80 ||
-    !neighborhood ||
-    !city ||
-    !STATE_PATTERN.test(state) ||
-    postalCode.length !== 8
+    whatsapp.length > 15
   ) {
     return null;
   }
@@ -398,15 +352,6 @@ export function parseBuyer(value: unknown): Buyer | null {
     name,
     email,
     whatsapp,
-    address: {
-      street,
-      number,
-      complement,
-      neighborhood,
-      city,
-      state,
-      postalCode,
-    },
   };
 }
 
@@ -1309,13 +1254,13 @@ export function createSupabaseOrderRepository(
         p_buyer_name: buyer.name,
         p_buyer_email: buyer.email,
         p_buyer_whatsapp: buyer.whatsapp,
-        p_delivery_street: buyer.address.street,
-        p_delivery_number: buyer.address.number,
-        p_delivery_complement: buyer.address.complement,
-        p_delivery_neighborhood: buyer.address.neighborhood,
-        p_delivery_city: buyer.address.city,
-        p_delivery_state: buyer.address.state,
-        p_delivery_postal_code: buyer.address.postalCode,
+        p_delivery_street: null,
+        p_delivery_number: null,
+        p_delivery_complement: null,
+        p_delivery_neighborhood: null,
+        p_delivery_city: null,
+        p_delivery_state: null,
+        p_delivery_postal_code: null,
         p_site_origin: siteOrigin,
         p_referral_code: referralCode,
       }) as OrderRecord;
@@ -1426,21 +1371,6 @@ export function createMercadoPagoAdapter(
               name: request.buyer.name,
               email: request.buyer.email,
               phone: { number: request.buyer.whatsapp },
-              address: {
-                zip_code: request.buyer.address.postalCode,
-                street_name: request.buyer.address.street,
-                street_number: request.buyer.address.number,
-              },
-            },
-            shipments: {
-              receiver_address: {
-                zip_code: request.buyer.address.postalCode,
-                street_name: request.buyer.address.street,
-                street_number: request.buyer.address.number,
-                city_name: request.buyer.address.city,
-                state_name: request.buyer.address.state,
-                country_name: "Brasil",
-              },
             },
             external_reference: request.externalReference,
             back_urls: request.backUrls,
@@ -1455,12 +1385,6 @@ export function createMercadoPagoAdapter(
         request.buyer.name,
         request.buyer.email,
         request.buyer.whatsapp,
-        request.buyer.address.street,
-        request.buyer.address.number,
-        request.buyer.address.complement,
-        request.buyer.address.neighborhood,
-        request.buyer.address.city,
-        request.buyer.address.postalCode,
         request.externalReference,
         request.providerIdempotencyKey,
       ].filter((entry) => entry.length >= 3);

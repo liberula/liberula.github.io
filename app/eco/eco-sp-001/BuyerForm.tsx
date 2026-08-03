@@ -4,7 +4,6 @@ import { FormEvent, useRef, useState, type RefObject } from "react";
 import {
   FiArrowRight,
   FiLoader,
-  FiMapPin,
   FiRefreshCw,
   FiShield,
 } from "react-icons/fi";
@@ -23,28 +22,9 @@ export type BuyerPayload = {
   name: string;
   email: string;
   whatsapp: string;
-  address: {
-    street: string;
-    number: string;
-    complement: string;
-    neighborhood: string;
-    city: string;
-    state: string;
-    postalCode: string;
-  };
 };
 
-type BuyerField =
-  | "name"
-  | "email"
-  | "whatsapp"
-  | "street"
-  | "number"
-  | "complement"
-  | "neighborhood"
-  | "city"
-  | "state"
-  | "postalCode";
+type BuyerField = "name" | "email" | "whatsapp";
 
 type BuyerErrors = Partial<Record<BuyerField, string>>;
 
@@ -81,52 +61,6 @@ const fields: Array<{
     autoComplete: "tel",
     maxLength: 30,
     className: styles.fullField,
-  },
-  {
-    name: "street",
-    label: "Logradouro",
-    autoComplete: "address-line1",
-    maxLength: 160,
-    className: styles.addressStreet,
-  },
-  {
-    name: "number",
-    label: "Número",
-    autoComplete: "address-line2",
-    maxLength: 20,
-    className: styles.addressNumber,
-  },
-  {
-    name: "complement",
-    label: "Complemento (opcional)",
-    autoComplete: "address-line3",
-    maxLength: 80,
-    className: styles.fullField,
-  },
-  {
-    name: "neighborhood",
-    label: "Bairro",
-    autoComplete: "address-level3",
-    maxLength: 100,
-  },
-  {
-    name: "city",
-    label: "Cidade",
-    autoComplete: "address-level2",
-    maxLength: 100,
-  },
-  {
-    name: "state",
-    label: "UF",
-    autoComplete: "address-level1",
-    maxLength: 2,
-  },
-  {
-    name: "postalCode",
-    label: "CEP",
-    inputMode: "numeric",
-    autoComplete: "postal-code",
-    maxLength: 10,
   },
 ];
 
@@ -252,13 +186,13 @@ export default function BuyerForm({
           Dados do comprador
         </h2>
         <p>
-          Informe seus dados de contato e entrega. Ao enviar, você seguirá
+          Informe seus dados de contato. Ao enviar, você seguirá
           diretamente para o ambiente seguro do Mercado Pago.
         </p>
       </div>
 
       <div className={styles.buyerGrid}>
-        {fields.slice(0, 3).map((field) => (
+        {fields.map((field) => (
           <BuyerFieldInput
             key={field.name}
             field={field}
@@ -270,33 +204,9 @@ export default function BuyerForm({
         ))}
       </div>
 
-      <fieldset
-        className={styles.addressFields}
-        disabled={checkoutState === "submitting"}
-      >
-        <legend>
-          <FiMapPin aria-hidden="true" /> Endereço de entrega
-        </legend>
-        <div className={styles.addressGrid}>
-          {fields.slice(3).map((field) => (
-            <BuyerFieldInput
-              key={field.name}
-              field={field}
-              error={errors[field.name]}
-              disabled={checkoutState === "submitting"}
-              clearError={() =>
-                setErrors((current) => ({
-                  ...current,
-                  [field.name]: undefined,
-                }))}
-            />
-          ))}
-        </div>
-      </fieldset>
-
       <p className={styles.dataNote}>
         <FiShield aria-hidden="true" /> Seus dados serão enviados somente ao
-        servidor da E.C.O. para criar o pedido e preparar o pagamento.
+        servidor da E.C.O. para criar a reserva de acesso e preparar o pagamento.
       </p>
 
       <button

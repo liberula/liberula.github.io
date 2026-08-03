@@ -384,7 +384,8 @@ export function createWebhookHandler(dependencies: WebhookDependencies) {
       ? "external_reference_mismatch"
       : payment.currency !== "BRL"
       ? "currency_mismatch"
-      : !Number.isFinite(payment.amount) || payment.amount !== 79.90
+      : !Number.isFinite(payment.amount) ||
+          ![49.90, 79.90].includes(payment.amount)
       ? "amount_mismatch"
       : !mappedStatus || Number.isNaN(providerUpdatedAt)
       ? "invalid_status"
@@ -421,7 +422,8 @@ export function createWebhookHandler(dependencies: WebhookDependencies) {
     if (
       order.externalReference !== payment.externalReference ||
       order.caseId !== "eco-sp-001" ||
-      order.amountCents !== 7990 ||
+      ![4990, 7990].includes(order.amountCents) ||
+      order.amountCents !== Math.round(payment.amount * 100) ||
       order.currency !== "BRL" ||
       (order.providerPaymentId !== null &&
         order.providerPaymentId !== payment.id)

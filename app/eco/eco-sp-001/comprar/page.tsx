@@ -5,9 +5,9 @@ import styles from "../EcoCase.module.css";
 import PurchaseExperience from "./PurchaseExperience";
 
 export const metadata: Metadata = {
-  title: "Participar do Lote Fundador | E.C.O.",
+  title: "Financiar a próxima missão digital | E.C.O.",
   description:
-    "Cadastre seus dados de entrega e continue para o pagamento do próximo dossiê físico E.C.O.",
+    "Reserve acesso fundador à próxima missão digital da E.C.O. e continue para o pagamento seguro.",
   robots: {
     index: false,
     follow: false,
@@ -42,7 +42,7 @@ export default function EcoPurchasePage() {
               <span>ENCONTRAR. CONTER. OCULTAR.</span>
             </div>
           </div>
-          <span className={styles.caseCode}>LOTE FUNDADOR / ECO-SP-001</span>
+          <span className={styles.caseCode}>MISSÃO DIGITAL / ACESSO FUNDADOR</span>
         </div>
       </header>
 

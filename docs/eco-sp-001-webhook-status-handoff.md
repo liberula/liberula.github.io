@@ -66,7 +66,9 @@ tokens, or raw provider responses. Add `Cache-Control: no-store`.
     Validate the authoritative payment ID, `external_reference`, currency, and
     transaction amount before resolving the internal order.
 12. Resolve the order through the immutable external reference created in T003.
-    Require the stored order to be `eco-sp-001`, `7990` cents, and `BRL`.
+    Require the stored order to be `eco-sp-001`, match the authoritative
+    transaction amount, and use `BRL`. New digital orders use `4990` cents;
+    historical `7990`-cent orders remain verifiable.
 13. Map authoritative provider states:
     - `approved` to `paid`;
     - `pending` and `in_process` to `pending`;

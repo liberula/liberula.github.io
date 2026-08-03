@@ -33,18 +33,18 @@ export default function FounderProgress({
   if (campaign.goalReached) {
     return (
       <div className={styles.founderProgress}>
-        <strong>META DE PRODUÇÃO ATINGIDA</strong>
+        <strong>META ATINGIDA</strong>
         <div
           className={styles.progressBar}
           role="img"
-          aria-label="Meta de produção atingida"
+          aria-label="Meta da próxima missão atingida"
         >
           <span style={{ width: "100%" }} />
         </div>
-        <p>O lote fundador está confirmado.</p>
+        <p>A próxima missão foi autorizada.</p>
         <p>
-          Novos investigadores ainda podem participar enquanto as inscrições
-          estiverem abertas.
+          Novos participantes ainda podem garantir acesso fundador enquanto a
+          campanha estiver aberta. Total atual: {campaign.confirmed} participantes.
         </p>
       </div>
     );
@@ -53,12 +53,12 @@ export default function FounderProgress({
   return (
     <div className={styles.founderProgress}>
       <strong>
-        {campaign.confirmed} de {campaign.target} dossiês confirmados
+        {campaign.confirmed} de {campaign.target} participantes
       </strong>
       <div
         className={styles.progressBar}
         role="progressbar"
-        aria-label={`${campaign.confirmed} de ${campaign.target} dossiês confirmados`}
+        aria-label={`${campaign.confirmed} de ${campaign.target} participantes`}
         aria-valuemin={0}
         aria-valuemax={campaign.target}
         aria-valuenow={campaign.confirmed}
@@ -66,7 +66,7 @@ export default function FounderProgress({
         <span style={{ width: `${campaign.displayPercent}%` }} />
       </div>
       <p>
-        A produção será confirmada quando o lote atingir 100 investigadores.
+        A próxima missão será autorizada quando a campanha atingir 100 participantes.
       </p>
     </div>
   );
