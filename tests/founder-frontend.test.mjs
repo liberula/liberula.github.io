@@ -21,8 +21,8 @@ const buyerForm = await readFile(
 const normalizedReveal = reveal.replace(/\s+/g, " ");
 
 test("progress appears after the final evidence and commercial invitation", () => {
-  const evidence = reveal.indexOf("ANEXO VISUAL RECUPERADO");
-  const invitation = reveal.indexOf("ECO-SP-001 foi liberado");
+  const evidence = reveal.indexOf("NOVA EVIDÊNCIA / CÂMERA EXTERNA");
+  const invitation = reveal.indexOf("AUTORIZAÇÃO DE CONTINUIDADE");
   const progress = reveal.indexOf("<FounderProgress");
   const price = reveal.indexOf("R$ 79,90");
   assert.ok(evidence < invitation);

@@ -24,12 +24,12 @@ Configure `ECO_SP_001_ANSWER_ALIASES` como um array JSON de strings:
   "Central Telefônica da Rua Benjamin Constant",
   "Antiga Central Telefônica da Benjamin Constant",
   "Antiga Central Telefônica da Rua Benjamin Constant",
-  "Rua Benjamin Constant 196",
-  "R. Benjamin Constant 196",
-  "Benjamin Constant 196",
-  "Rua Benjamin Constant 196 Sé",
-  "Rua Benjamin Constant 196 São Paulo",
-  "Rua Benjamin Constant 196 Sé São Paulo"
+  "Rua Benjamin Constant 200",
+  "R. Benjamin Constant 200",
+  "Benjamin Constant 200",
+  "Rua Benjamin Constant 200 Sé",
+  "Rua Benjamin Constant 200 São Paulo",
+  "Rua Benjamin Constant 200 Sé São Paulo"
 ]
 ```
 
@@ -38,9 +38,8 @@ Revise manualmente qualquer inclusão. Não adicione descrições amplas como
 normaliza cada entrada e faz somente igualdade exata; ele não usa busca parcial
 ou aproximação.
 
-Uma alteração nos aliases requer novo deploy (ou reinício equivalente no fluxo
-vigente da Supabase) do Edge Function para que as instâncias passem a usar a
-nova configuração.
+Secrets atualizados pela Supabase ficam disponíveis às novas invocações sem
+redeploy. O deploy do Edge Function só é necessário quando o código muda.
 
 ## Configuração no projeto Supabase
 
@@ -48,7 +47,7 @@ No PowerShell, a partir da raiz do repositório:
 
 ```powershell
 $aliases = @'
-["Posto Telefônica","Posto de Serviços Telefônica Benjamin Constant","Posto de Serviços Telefônica da Rua Benjamin Constant","Posto Telefônica Benjamin Constant","Central Telefônica Benjamin Constant","Central Telefônica da Rua Benjamin Constant","Antiga Central Telefônica da Benjamin Constant","Antiga Central Telefônica da Rua Benjamin Constant","Rua Benjamin Constant 196","R. Benjamin Constant 196","Benjamin Constant 196","Rua Benjamin Constant 196 Sé","Rua Benjamin Constant 196 São Paulo","Rua Benjamin Constant 196 Sé São Paulo"]
+["Posto Telefônica","Posto de Serviços Telefônica Benjamin Constant","Posto de Serviços Telefônica da Rua Benjamin Constant","Posto Telefônica Benjamin Constant","Central Telefônica Benjamin Constant","Central Telefônica da Rua Benjamin Constant","Antiga Central Telefônica da Benjamin Constant","Antiga Central Telefônica da Rua Benjamin Constant","Rua Benjamin Constant 200","R. Benjamin Constant 200","Benjamin Constant 200","Rua Benjamin Constant 200 Sé","Rua Benjamin Constant 200 São Paulo","Rua Benjamin Constant 200 Sé São Paulo"]
 '@
 
 supabase secrets set --project-ref icjuacgxxpmwqlmjmeuq "ECO_SP_001_ANSWER_ALIASES=$aliases"
@@ -74,8 +73,8 @@ Respostas que devem retornar `{ "correct": true }`:
 ```powershell
 Test-EcoAnswer 'Posto Telefônica'
 Test-EcoAnswer 'Central Telefônica Benjamin Constant'
-Test-EcoAnswer 'R. Benjamin Constant, 196'
-Test-EcoAnswer 'Rua Benjamin Constant 196 Sé São Paulo'
+Test-EcoAnswer 'R. Benjamin Constant, 200'
+Test-EcoAnswer 'Rua Benjamin Constant 200 Sé São Paulo'
 ```
 
 Respostas que devem retornar `{ "correct": false }`:
@@ -88,9 +87,11 @@ Test-EcoAnswer 'Rua Benjamin Constant'
 Test-EcoAnswer 'Rua Benjamin Constant 195'
 ```
 
-Inspecione todas as respostas e confirme que elas contêm somente `correct`.
-Nenhuma resposta pode revelar a resposta canônica, aliases, valor normalizado,
-dicas ou detalhes de similaridade.
+Inspecione todas as respostas. O contrato de validação contém somente o booleano
+`correct`. O backend é a autoridade sobre a lista de aliases e o frontend inicia
+o final pós-resposta apenas quando recebe `{ "correct": true }`.
+Nenhuma resposta revela a lista de aliases, o valor normalizado, dicas ou
+detalhes de similaridade.
 
 ## Validação local
 

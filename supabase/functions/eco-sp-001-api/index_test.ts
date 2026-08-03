@@ -394,12 +394,12 @@ const productionAliases = JSON.stringify([
   "Central Telefônica da Rua Benjamin Constant",
   "Antiga Central Telefônica da Benjamin Constant",
   "Antiga Central Telefônica da Rua Benjamin Constant",
-  "Rua Benjamin Constant 196",
-  "R. Benjamin Constant 196",
-  "Benjamin Constant 196",
-  "Rua Benjamin Constant 196 Sé",
-  "Rua Benjamin Constant 196 São Paulo",
-  "Rua Benjamin Constant 196 Sé São Paulo",
+  "Rua Benjamin Constant 200",
+  "R. Benjamin Constant 200",
+  "Benjamin Constant 200",
+  "Rua Benjamin Constant 200 Sé",
+  "Rua Benjamin Constant 200 São Paulo",
+  "Rua Benjamin Constant 200 Sé São Paulo",
 ]);
 
 const productionValidationConfig: EcoApiConfig = {
@@ -417,10 +417,10 @@ Deno.test("configured ECO-SP-001 equivalents are accepted exactly", async () => 
     "Central Telefônica Benjamin Constant",
     "central telefonica da rua benjamin constant",
     "Antiga central telefônica da Benjamin Constant",
-    "Rua Benjamin Constant, 196",
-    "R. Benjamin Constant 196",
-    "Benjamin Constant, 196",
-    "Rua Benjamin Constant, 196, Sé, São Paulo",
+    "Rua Benjamin Constant, 200",
+    "R. Benjamin Constant 200",
+    "Benjamin Constant, 200",
+    "Rua Benjamin Constant, 200, Sé, São Paulo",
   ];
   for (const answer of acceptedAnswers) {
     const response = await dependencies({
@@ -444,14 +444,14 @@ Deno.test("vague, unrelated, near, prefixed, and suffixed answers remain rejecte
     "Telefônica",
     "Benjamin Constant",
     "Rua Benjamin Constant",
-    "196",
+    "2000",
     "Sé",
     "São Paulo",
     "Estação Pedro II",
     "Escola Santi",
     "Dublin Hotel",
     "Rua Benjamin Constant 195",
-    "Rua Benjamin Constant 1960",
+    "Rua Benjamin Constant 2000",
     "Posto de Serviços Telefônica errado",
     "Acho que talvez seja uma central telefônica",
   ];

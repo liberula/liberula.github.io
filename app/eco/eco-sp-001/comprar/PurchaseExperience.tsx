@@ -151,13 +151,13 @@ export default function PurchaseExperience() {
   return (
     <>
       <section className={styles.purchaseIntro}>
-        <p className={styles.protocol}>PRÓXIMO CASO E.C.O. / LOTE FUNDADOR</p>
+        <p className={styles.protocol}>AUTORIZAÇÃO DE CONTINUIDADE / LOTE FUNDADOR</p>
         <h1 ref={pageHeadingRef} tabIndex={-1}>
-          Participar do lote fundador
+          Continuar a investigação
         </h1>
         <p>
-          Um novo dossiê físico com documentos, evidências e uma investigação
-          inédita.
+          Solicitação de um novo dossiê físico E.C.O., em desenvolvimento, com
+          documentos, evidências e uma investigação inédita.
         </p>
       </section>
 
@@ -170,6 +170,10 @@ export default function PurchaseExperience() {
         <strong className={styles.price}>R$ 79,90</strong>
         <dl className={styles.offerFacts}>
           <div>
+            <dt>Formato</dt>
+            <dd>Dossiê físico; não inclui edição digital integral. Apoios pontuais poderão ser digitais</dd>
+          </div>
+          <div>
             <dt>Meta de produção</dt>
             <dd>100 investigadores</dd>
           </div>
@@ -181,9 +185,21 @@ export default function PurchaseExperience() {
           </div>
           <div>
             <dt>Entrega estimada</dt>
-            <dd>15 dias</dd>
+            <dd>15 dias após a confirmação da produção</dd>
+          </div>
+          <div>
+            <dt>Se a meta não for atingida</dt>
+            <dd>A produção será cancelada e os valores pagos serão devolvidos integralmente pelo meio original</dd>
+          </div>
+          <div>
+            <dt>Devolução</dt>
+            <dd>Direito de arrependimento em até 7 dias da contratação ou do recebimento, conforme aplicável, com restituição integral</dd>
           </div>
         </dl>
+        <p className={styles.provisionalNote}>
+          A edição permanece em desenvolvimento. Conteúdo e materiais físicos
+          podem receber ajustes editoriais antes da confirmação da produção.
+        </p>
       </section>
 
       {closed ? (

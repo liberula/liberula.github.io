@@ -634,7 +634,8 @@ async function handleValidate(
   if (!submitted) {
     return json(400, { error: "invalid_request" }, origin);
   }
-  return json(200, { correct: accepted.has(submitted) }, origin);
+  const correct = accepted.has(submitted);
+  return json(200, { correct }, origin);
 }
 
 function preferenceRequest(
