@@ -20,11 +20,11 @@ const buyerForm = await readFile(
 );
 const normalizedReveal = reveal.replace(/\s+/g, " ");
 
-test("progress appears in the Liberula note after the operational report", () => {
-  const evidence = reveal.indexOf("SITUAÇÃO ATUAL");
-  const invitation = reveal.indexOf("UMA NOTA DA LIBERULA");
+test("progress appears in the Liberula note after the fictional cliffhanger", () => {
+  const evidence = reveal.indexOf("QUINA NÃO RETORNOU");
+  const invitation = reveal.indexOf("AGORA, FORA DA FICÇÃO");
   const progress = reveal.indexOf("<FounderProgress");
-  const price = reveal.indexOf("R$ 49,90");
+  const price = reveal.indexOf("R$ 29,90");
   assert.ok(evidence < invitation);
   assert.ok(invitation < progress);
   assert.ok(progress < price);

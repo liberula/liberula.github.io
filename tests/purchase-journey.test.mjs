@@ -58,7 +58,7 @@ test("purchase CTA carries safe referral context to the dedicated route", () => 
     "/eco/eco-sp-001/comprar?ref=AB7C09DE12FF",
   );
   assert.match(reveal, /href=\{buildPurchasePath\(referralCode\)\}/);
-  assert.match(reveal, /FINANCIAR A PRÓXIMA MISSÃO/);
+  assert.match(reveal, /QUERO SER UM AGENTE/);
   assert.doesNotMatch(reveal, /<BuyerForm/);
 });
 

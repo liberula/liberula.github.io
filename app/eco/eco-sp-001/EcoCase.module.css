@@ -2066,3 +2066,273 @@
   border-color: #dcb24a;
   color: #dcb24a;
 }
+
+.postSolveStage {
+  max-width: 980px;
+  margin: clamp(36px, 7vw, 78px) auto 0;
+  padding: clamp(26px, 5vw, 54px);
+  border-block: 1px solid rgba(232, 229, 220, 0.2);
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.025), transparent 48%);
+  animation: postSolveEnter 0.48s ease both;
+}
+
+.postSolveStage h2,
+.signalInterruption h2,
+.postSolveCliffhanger h2 {
+  max-width: 760px;
+  margin: 8px 0 22px;
+  color: #f0ede5;
+  font-size: clamp(1.65rem, 4.8vw, 3.25rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+}
+
+.postSolveStage > p:not(.protocol),
+.postSolveAgentGrid > div > p:not(.protocol),
+.signalInterruption > p:not(.protocol),
+.postSolveCliffhanger > p:not(.protocol) {
+  max-width: 740px;
+  color: #bbb7ae;
+  font-size: clamp(0.98rem, 2vw, 1.12rem);
+  line-height: 1.72;
+}
+
+.postSolveLead {
+  margin-bottom: 30px;
+}
+
+.postSolveAgentGrid {
+  display: grid;
+  grid-template-columns: minmax(190px, 280px) minmax(0, 1fr);
+  gap: clamp(26px, 6vw, 64px);
+  align-items: start;
+}
+
+.postSolveAgentRecord,
+.postSolveEvidence,
+.narrativeAssetPending {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid rgba(232, 229, 220, 0.2);
+  background: #090a0a;
+}
+
+.postSolveAgentRecord {
+  padding: 10px;
+}
+
+.postSolveAgentRecord img,
+.postSolveEvidence img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.postSolveAgentRecord img {
+  filter: saturate(0.72) contrast(1.06);
+}
+
+.postSolveAgentRecord figcaption,
+.postSolveEvidence figcaption,
+.narrativeAssetPending figcaption {
+  padding: 13px 14px 5px;
+  color: #918d84;
+  font: 0.68rem/1.5 monospace;
+  letter-spacing: 0.055em;
+}
+
+.postSolveEvidence figcaption,
+.narrativeAssetPending figcaption {
+  padding-bottom: 14px;
+  border-top: 1px solid rgba(232, 229, 220, 0.16);
+}
+
+.postSolveTransmission {
+  min-width: 0;
+  margin-top: 28px;
+  border-block: 1px solid rgba(232, 229, 220, 0.15);
+  background: #090a0a;
+}
+
+.postSolveTransmission p {
+  display: grid;
+  grid-template-columns: 76px 86px minmax(0, 1fr);
+  gap: 12px;
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(232, 229, 220, 0.08);
+  color: #d4d0c7;
+  font: 0.76rem/1.5 monospace;
+}
+
+.postSolveTransmission p:last-child {
+  border-bottom: 0;
+}
+
+.postSolveTransmission time {
+  color: #77746d;
+}
+
+.postSolveTransmission strong {
+  color: #d94b55;
+  letter-spacing: 0.04em;
+}
+
+.postSolveComparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 30px;
+}
+
+.narrativeAssetPending > div {
+  display: grid;
+  place-content: center;
+  gap: 9px;
+  width: 100%;
+  background:
+    linear-gradient(135deg, transparent 49.8%, rgba(232, 229, 220, 0.08) 50%, transparent 50.2%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 5px),
+    #0d0f0f;
+  color: #77746d;
+  text-align: center;
+}
+
+.narrativeAssetPending span,
+.narrativeAssetPending code {
+  font: 700 0.64rem/1.45 monospace;
+  letter-spacing: 0.08em;
+}
+
+.narrativeAssetPending code {
+  color: #5f5d57;
+  letter-spacing: 0.02em;
+}
+
+.postSolvePassage {
+  border-color: rgba(185, 42, 53, 0.4);
+  background:
+    radial-gradient(circle at 80% 20%, rgba(151, 26, 38, 0.12), transparent 42%),
+    #101212;
+}
+
+.postSolvePassage .narrativeAssetPending {
+  margin-top: 32px;
+}
+
+.signalInterruption {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: clamp(70px, 12vw, 132px) clamp(26px, 5vw, 54px);
+  text-align: center;
+  animation: postSolveEnter 0.45s ease both;
+}
+
+.signalInterruption h2,
+.signalInterruption > p {
+  margin-inline: auto;
+}
+
+.signalInterruption > span {
+  display: block;
+  width: min(420px, 75%);
+  height: 1px;
+  margin: 42px auto;
+  background: linear-gradient(90deg, transparent, #a42f39, transparent);
+}
+
+.signalInterruption > p:not(.protocol) {
+  margin-block: 8px;
+}
+
+.postSolveCliffhanger {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: clamp(42px, 7vw, 78px);
+  border: 1px solid rgba(220, 178, 74, 0.4);
+  background: #0d0f0f;
+  text-align: center;
+  animation: postSolveEnter 0.45s ease both;
+}
+
+.postSolveCliffhanger h2,
+.postSolveCliffhanger > p {
+  margin-inline: auto;
+}
+
+.postSolveCliffhanger dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: 38px 0 0;
+  padding: 1px;
+  background: rgba(232, 229, 220, 0.2);
+}
+
+.postSolveCliffhanger dl div {
+  padding: 18px;
+  background: #111313;
+}
+
+.postSolveCliffhanger dt {
+  color: #858179;
+  font: 700 0.64rem/1.4 monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.postSolveCliffhanger dd {
+  margin: 8px 0 0;
+  color: #f0ede5;
+  font: 800 0.8rem/1.4 monospace;
+  letter-spacing: 0.035em;
+}
+
+.postSolveCliffhanger + .liberulaNote {
+  margin-top: clamp(86px, 13vw, 150px);
+}
+
+@keyframes postSolveEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 720px) {
+  .postSolveAgentGrid,
+  .postSolveComparison,
+  .postSolveCliffhanger dl {
+    grid-template-columns: 1fr;
+  }
+
+  .postSolveAgentRecord {
+    max-width: 260px;
+  }
+
+  .postSolveTransmission p {
+    grid-template-columns: 66px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .postSolveTransmission p span {
+    grid-column: 2;
+  }
+
+  .narrativeAssetPending code {
+    padding-inline: 12px;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .postSolveStage,
+  .signalInterruption,
+  .postSolveCliffhanger {
+    animation: none;
+  }
+}
