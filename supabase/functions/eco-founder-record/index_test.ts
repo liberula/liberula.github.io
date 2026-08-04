@@ -32,6 +32,8 @@ function handler(
     logs,
     handle: createFounderRecordHandler({
       rateLimitSalt: "synthetic-rate-limit-salt-at-least-32-bytes",
+      recordApiUrl:
+        "https://records.example.test/functions/v1/eco-founder-record",
       repository: {
         consumeRateLimit: () => Promise.resolve(rateAllowed),
         hasAccess: () => Promise.resolve(allowed),
@@ -86,6 +88,16 @@ Deno.test("paid access returns a private noindex textual transcript", async () =
   assert(
     context.logs.includes("eco_founder_record_opened"),
     "open event missing",
+  );
+  assert(
+    html.includes(
+      "https://records.example.test/functions/v1/eco-founder-record?access=",
+    ) && html.includes("&amp;asset=image"),
+    "protected image did not use the configured public API URL",
+  );
+  assert(
+    !html.includes("https://records.example.test/quina?"),
+    "internal request URL leaked into the protected image",
   );
 });
 

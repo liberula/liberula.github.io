@@ -47,6 +47,7 @@ function payment(
   return {
     id: PAYMENT_ID,
     liveMode: false,
+    testPayer: false,
     collectorId: COLLECTOR_ID,
     externalReference: EXTERNAL_REFERENCE,
     preferenceId: "synthetic-preference-id",
@@ -559,6 +560,35 @@ Deno.test("authoritative payment live_mode must match the configured environment
   assert(
     testContext.repository.processCalls === 0,
     "live payment reached test DB",
+  );
+
+  const simulatedTestProvider = new MemoryProvider();
+  simulatedTestProvider.value = payment({ liveMode: true, testPayer: true });
+  const simulatedTest = run({ provider: simulatedTestProvider });
+  const acceptedSimulatedTest = await simulatedTest.handler(webhookRequest({
+    body: { live_mode: false, type: "payment", data: { id: PAYMENT_ID } },
+  }));
+  assert(
+    acceptedSimulatedTest.status === 200,
+    "simulated test-buyer payment should be acknowledged",
+  );
+  assert(
+    simulatedTest.repository.orderStatus === "paid",
+    "simulated test-buyer payment was not stored",
+  );
+
+  const liveNotificationTestProvider = new MemoryProvider();
+  liveNotificationTestProvider.value = payment({
+    liveMode: true,
+    testPayer: true,
+  });
+  const liveNotificationTest = run({ provider: liveNotificationTestProvider });
+  await liveNotificationTest.handler(webhookRequest({
+    body: { live_mode: true, type: "payment", data: { id: PAYMENT_ID } },
+  }));
+  assert(
+    liveNotificationTest.repository.processCalls === 0,
+    "live notification reached test DB",
   );
 
   const developmentProvider = new MemoryProvider();

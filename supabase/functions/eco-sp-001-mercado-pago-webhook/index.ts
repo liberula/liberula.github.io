@@ -19,6 +19,7 @@ export type WebhookConfig = {
 export type AuthoritativePayment = {
   id: string;
   liveMode: boolean;
+  testPayer: boolean;
   collectorId: string;
   externalReference: string;
   preferenceId: string | null;
@@ -278,6 +279,19 @@ function notificationLiveMode(value: unknown): boolean | undefined {
     : undefined;
 }
 
+function paymentMatchesEnvironment(
+  payment: AuthoritativePayment,
+  environment: MercadoPagoEnvironment,
+  receivedLiveMode: boolean | undefined,
+): boolean {
+  if (environment === "production") return payment.liveMode;
+  if (!payment.liveMode) return true;
+  // Checkout Pro test buyers may produce an authoritative payment marked
+  // live_mode=true. Accept that narrow case only for an explicitly simulated
+  // non-live webhook and a provider-confirmed @testuser.com payer.
+  return payment.testPayer && receivedLiveMode === false;
+}
+
 function validBody(value: unknown, signedPaymentId: string): boolean {
   if (!isPlainObject(value) || value.type !== "payment") return false;
   if (!isPlainObject(value.data)) return false;
@@ -401,8 +415,11 @@ export function createWebhookHandler(dependencies: WebhookDependencies) {
       ? "invalid_status"
       : payment.collectorId !== dependencies.config.expectedCollectorId
       ? "collector_mismatch"
-      : payment.liveMode !==
-          (dependencies.config.mercadoPagoEnvironment === "production")
+      : !paymentMatchesEnvironment(
+          payment,
+          dependencies.config.mercadoPagoEnvironment!,
+          receivedLiveMode,
+        )
       ? "environment_mismatch"
       : null;
     if (paymentRejection) {
@@ -615,6 +632,9 @@ function createMercadoPagoProvider(accessToken?: string): PaymentProvider {
       return {
         id: String(value.id ?? ""),
         liveMode: value.live_mode === true,
+        testPayer: isPlainObject(value.payer) &&
+          typeof value.payer.email === "string" &&
+          /@testuser\.com$/iu.test(value.payer.email),
         collectorId: String(value.collector_id ?? ""),
         externalReference: String(value.external_reference ?? ""),
         preferenceId: typeof value.preference_id === "string"

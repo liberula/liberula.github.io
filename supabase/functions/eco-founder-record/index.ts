@@ -8,6 +8,7 @@ export type FounderRecordRepository = {
 export type FounderRecordDependencies = {
   rateLimitSalt?: string;
   allowedOrigins?: string[];
+  recordApiUrl?: string;
   repository: FounderRecordRepository;
   loadImage?: () => Promise<Uint8Array>;
   logger?: {
@@ -102,6 +103,25 @@ function imageResponse(body: Uint8Array): Response {
       "X-Content-Type-Options": "nosniff",
     },
   });
+}
+
+function protectedImageUrl(
+  recordApiUrl: string | undefined,
+  token: string,
+): string | undefined {
+  if (!recordApiUrl) return undefined;
+  try {
+    const url = new URL(recordApiUrl);
+    if (
+      url.protocol !== "https:" || url.username || url.password ||
+      url.search || url.hash
+    ) return undefined;
+    url.searchParams.set("access", token);
+    url.searchParams.set("asset", "image");
+    return url.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 export function renderFounderRecordPage(imageUrl?: string): string {
@@ -240,12 +260,11 @@ export function createFounderRecordHandler(
       }
     }
     dependencies.logger?.info?.("eco_founder_record_opened");
-    const imageUrl = new URL(request.url);
-    imageUrl.searchParams.set("asset", "image");
+    const imageUrl = protectedImageUrl(dependencies.recordApiUrl, token);
     return withCors(
       response(
         200,
-        renderFounderRecordPage(imageUrl.toString()),
+        renderFounderRecordPage(imageUrl),
         "text/plain; charset=utf-8",
       ),
       origin,
@@ -306,9 +325,12 @@ if (import.meta.main) {
     allowedOrigins: (Deno.env.get("ECO_ALLOWED_ORIGINS") ?? "").split(",").map((
       value,
     ) => value.trim()).filter(Boolean),
+    recordApiUrl: Deno.env.get("ECO_FOUNDER_RECORD_API_URL"),
     repository,
     loadImage: () =>
-      image ??= Deno.readFile("./assets/quina-final-transmission.png"),
+      image ??= Deno.readFile(
+        new URL("./assets/quina-final-transmission.png", import.meta.url),
+      ),
     logger: {
       info: (message) => console.info(message),
       error: (message) => console.error(message),
