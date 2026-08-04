@@ -51,13 +51,15 @@ O RPC recusa retry de `postmark_result_unknown`, de mensagem já enviada, de ped
 
 `eco-founder-record` valida o token no servidor, confirma o estado do pedido,
 aplica rate limit distribuído e responde sem cache. A página do site possui
-`noindex` e `Referrer-Policy: no-referrer`; a imagem e o áudio usam a mesma
-capability e nunca são servidos por um caminho público. Nenhuma resposta contém
+`noindex` e `Referrer-Policy: no-referrer`; a imagem usa a mesma capability e
+nunca é servida por um caminho público. Nenhuma resposta contém
 dados do comprador. A API devolve o documento como texto para contornar a
 restrição de HTML no domínio padrão das Edge Functions, e o site o exibe em
 um iframe sandboxed.
 
-A transcrição aprovada é a alternativa acessível ao áudio. O player só aparece quando `ECO_FOUNDER_AUDIO_URL` aponta para um MP3 final HTTPS. Enquanto o arquivo definitivo não existir, a página identifica explicitamente a pendência editorial; nenhum áudio sintético, silencioso ou improvisado é publicado.
+A transmissão recuperada é uma transcrição textual estilizada como
+comunicação operacional. Não existe arquivo de áudio, player, streaming,
+proxy de mídia ou dependência de gravação.
 
 O asset visual fica empacotado privadamente com a função:
 
@@ -77,7 +79,6 @@ A interface não destaca nem menciona detalhes ocultos da imagem.
 - `NEXT_PUBLIC_ECO_FOUNDER_RECORD_API_URL` (somente endpoint, nunca segredo)
 - `ECO_PUBLIC_BASE_URL`
 - `ECO_FOUNDER_RECORD_RATE_LIMIT_SALT`
-- `ECO_FOUNDER_AUDIO_URL` (somente depois do MP3 aprovado)
 - `ECO_SUPPORT_EMAIL`
 - `POSTMARK_SERVER_TOKEN`
 - `POSTMARK_FROM_EMAIL`
@@ -97,10 +98,6 @@ ECO_FOUNDER_RECORD_API_URL=https://icjuacgxxpmwqlmjmeuq.supabase.co/functions/v1
 NEXT_PUBLIC_ECO_FOUNDER_RECORD_API_URL=https://icjuacgxxpmwqlmjmeuq.supabase.co/functions/v1/eco-founder-record
 ECO_FOUNDER_RECORD_PAGE_URL=https://liberula.com/eco/eco-sp-001/registros/quina-final
 ```
-
-`ECO_FOUNDER_AUDIO_URL` deve apontar para o MP3 final em armazenamento privado
-ou URL HTTPS não enumerável. A URL de origem permanece server-side e o arquivo
-é retransmitido pelo endpoint protegido; não usar um caminho em `public/`.
 
 ## Publicação e recuperação
 
@@ -135,9 +132,10 @@ envia arquivos estáticos da função.
 2. Entregar webhook assinado e autoritativo `approved`.
 3. Confirmar uma linha de mensagem e um único envio Postmark.
 4. Repetir o webhook e confirmar que `sent_at` e `provider_message_id` não mudam.
-5. Abrir o CTA, confirmar `noindex`, transcrição e player/fallback.
+5. Abrir o CTA, confirmar `noindex`, imagem e transcrição textual completa.
 6. Testar HTML, texto simples, imagens bloqueadas, Gmail, Outlook, Apple Mail e viewport estreito.
 7. Simular 5xx e confirmar retry limitado; simular timeout e confirmar revisão humana sem retry.
 8. Confirmar que logs contêm somente categorias operacionais, nunca PII, token ou corpo da mensagem.
 
-Eventos operacionais: `eco_founder_email_requested`, `eco_founder_email_sent`, `eco_founder_email_failed`, `eco_founder_record_opened`, `eco_founder_audio_started` e `eco_founder_audio_completed`.
+Eventos operacionais: `eco_founder_email_requested`, `eco_founder_email_sent`,
+`eco_founder_email_failed` e `eco_founder_record_opened`.

@@ -11,6 +11,7 @@ const renderer = await read("lib/eco/founder-post-purchase-email.mjs");
 const config = await read("supabase/config.toml");
 const recordPage = await read("app/eco/eco-sp-001/registros/quina-final/page.tsx");
 const recordClient = await read("app/eco/eco-sp-001/registros/quina-final/FounderRecord.tsx");
+const environmentExample = await read(".env.example");
 
 test("only a future authoritative transition to paid enqueues one founder message", () => {
   assert.match(migration, /after update of status on public\.eco_orders/i);
@@ -59,7 +60,7 @@ test("record capability is opaque, protected, noindex, rate-limited, and refund-
 test("email and record preserve the approved narrative and privacy boundaries", () => {
   assert.match(renderer, /E\.C\.O\. \/\/ Registro final do agente Quina/);
   assert.match(renderer, /ACESSO FUNDADOR CONFIRMADO/);
-  assert.match(renderer, /OUVIR REGISTRO RECUPERADO/);
+  assert.match(renderer, /ABRIR REGISTRO RECUPERADO/);
   assert.doesNotMatch(renderer, /alt="[^"]*(entidade|reflexo|monstro|criatura)/i);
   assert.doesNotMatch(renderer, /próximo caso/i);
   for (const line of [
@@ -71,6 +72,11 @@ test("email and record preserve the approved narrative and privacy boundaries", 
     "ME TIRA DAQUI!",
     "[TRANSMISSÃO INTERROMPIDA]",
   ]) assert.ok(record.includes(line), line);
+  assert.doesNotMatch(record, /<audio|audio\/mpeg|asset === "audio"|ECO_FOUNDER_AUDIO_URL|\.mp3/i);
+  assert.doesNotMatch(renderer, /OUVIR REGISTRO|<audio|\.mp3/i);
+  assert.doesNotMatch(recordClient, /audio_started|audio_completed/i);
+  assert.doesNotMatch(environmentExample, /ECO_FOUNDER_AUDIO_URL/);
+  assert.doesNotMatch(record, /alt="[^"]*(entidade|reflexo|monstro|criatura)/i);
 });
 
 test("new public functions are gateway-public but enforce their own contracts", () => {

@@ -8,13 +8,9 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-function request(method = "GET", token = TOKEN, body?: unknown): Request {
+function request(method = "GET", token = TOKEN): Request {
   return new Request(`https://records.example.test/quina?access=${token}`, {
     method,
-    headers: method === "POST"
-      ? { "Content-Type": "application/json" }
-      : undefined,
-    body: method === "POST" ? JSON.stringify(body) : undefined,
   });
 }
 
@@ -26,10 +22,9 @@ function imageRequest(token = TOKEN, origin?: string): Request {
 }
 
 function handler(
-  { allowed = true, rateAllowed = true, audioUrl }: {
+  { allowed = true, rateAllowed = true }: {
     allowed?: boolean;
     rateAllowed?: boolean;
-    audioUrl?: string;
   } = {},
 ) {
   const logs: string[] = [];
@@ -37,7 +32,6 @@ function handler(
     logs,
     handle: createFounderRecordHandler({
       rateLimitSalt: "synthetic-rate-limit-salt-at-least-32-bytes",
-      audioUrl,
       repository: {
         consumeRateLimit: () => Promise.resolve(rateAllowed),
         hasAccess: () => Promise.resolve(allowed),
@@ -66,7 +60,7 @@ Deno.test("invalid, missing, unpaid, and rate-limited record access is rejected"
   );
 });
 
-Deno.test("paid access returns a private noindex transcript with an honest audio placeholder", async () => {
+Deno.test("paid access returns a private noindex textual transcript", async () => {
   const context = handler();
   const response = await context.handle(request());
   const html = await response.text();
@@ -84,9 +78,11 @@ Deno.test("paid access returns a private noindex transcript with an honest audio
     "approved transcript incomplete",
   );
   assert(
-    html.includes("ARQUIVO DE ÁUDIO PENDENTE"),
-    "missing audio was presented as final",
+    html.includes("Transcrição operacional do agente Quina"),
+    "textual transcript label missing",
   );
+  assert(!html.includes("<audio"), "audio player was rendered");
+  assert(!/mp3|ECO_FOUNDER_AUDIO_URL/iu.test(html), "audio dependency leaked");
   assert(
     context.logs.includes("eco_founder_record_opened"),
     "open event missing",
@@ -130,42 +126,13 @@ Deno.test("sandboxed document can load protected subresources without opening ac
   );
 });
 
-Deno.test("configured MP3 renders an accessible player and safe fallback", () => {
+Deno.test("record is a complete textual transcript with no media dependency", () => {
   const html = renderFounderRecordPage(
-    "https://liberula.com/eco/eco-sp-001/audio/quina-final-log.mp3",
+    "https://records.example.test/quina?access=opaque&asset=image",
   );
+  assert(html.includes("Transcrição operacional"), "transcript missing");
   assert(
-    html.includes("<audio") && html.includes("controls"),
-    "audio player missing",
-  );
-  assert(
-    html.includes("Seu navegador não reproduz este áudio"),
-    "player fallback missing",
-  );
-  assert(
-    html.includes("eco_founder_audio_started") &&
-      html.includes("eco_founder_audio_completed"),
-    "audio analytics missing",
-  );
-});
-
-Deno.test("audio analytics are allowlisted and contain no access token or PII", async () => {
-  const context = handler({
-    audioUrl: "https://liberula.com/eco/eco-sp-001/audio/quina-final-log.mp3",
-  });
-  const response = await context.handle(
-    request("POST", TOKEN, { event: "eco_founder_audio_started" }),
-  );
-  assert(response.status === 204, "valid audio event rejected");
-  assert(
-    context.logs.join(" ") === "eco_founder_audio_started",
-    "analytics log contains unexpected data",
-  );
-  assert(!context.logs.join(" ").includes(TOKEN), "access token was logged");
-  assert(
-    (await context.handle(
-      request("POST", TOKEN, { event: "email@example.test" }),
-    )).status === 404,
-    "arbitrary analytics event accepted",
+    !/<audio|mp3|audio_started|audio_completed/iu.test(html),
+    "audio infrastructure remains",
   );
 });

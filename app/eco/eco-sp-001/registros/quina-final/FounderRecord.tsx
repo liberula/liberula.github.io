@@ -5,10 +5,6 @@ import { useSearchParams } from "next/navigation";
 import styles from "./FounderRecord.module.css";
 
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
-const TRACK_EVENTS = new Set([
-  "eco_founder_audio_started",
-  "eco_founder_audio_completed",
-]);
 
 function configuredEndpoint(): string | null {
   const value = process.env.NEXT_PUBLIC_ECO_FOUNDER_RECORD_API_URL;
@@ -59,16 +55,6 @@ export default function FounderRecord() {
       if (event.source !== iframe.current?.contentWindow || !event.data || event.data.source !== "eco-founder-record") return;
       if (Number.isFinite(event.data.height)) {
         setHeight(Math.min(10000, Math.max(600, Math.ceil(event.data.height))));
-      }
-      if (typeof event.data.event === "string" && TRACK_EVENTS.has(event.data.event)) {
-        fetch(`${endpoint}?access=${encodeURIComponent(token)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ event: event.data.event }),
-          credentials: "omit",
-          referrerPolicy: "no-referrer",
-          keepalive: true,
-        }).catch(() => undefined);
       }
     };
     window.addEventListener("message", listener);

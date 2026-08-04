@@ -183,9 +183,10 @@ Deno.test("founder email has safe narrative, dynamic financial data, and escaped
   );
   assert(content.preheader.includes("agente fundador"), "preview missing");
   assert(
-    content.htmlBody.includes("OUVIR REGISTRO RECUPERADO"),
-    "audio CTA missing",
+    content.htmlBody.includes("ABRIR REGISTRO RECUPERADO"),
+    "transcript CTA missing",
   );
+  assert(!/<audio|\.mp3/iu.test(content.htmlBody), "audio dependency rendered");
   assert(
     content.htmlBody.includes("R$&nbsp;49,90") ||
       content.htmlBody.includes("R$ 49,90") ||
