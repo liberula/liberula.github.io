@@ -74,6 +74,8 @@ export type WebhookDependencies = {
   config: WebhookConfig;
   provider: PaymentProvider;
   repository: PaymentRepository;
+  requestFounderEmailDispatch?: () => Promise<void>;
+  defer?: (work: Promise<void>) => void;
   now?: () => number;
   logger?: {
     info: (entry: {
@@ -494,6 +496,22 @@ export function createWebhookHandler(dependencies: WebhookDependencies) {
         : { notificationLiveMode: receivedLiveMode }),
       paymentLiveMode: payment.liveMode,
     });
+    if (mappedStatus === "paid" && dependencies.requestFounderEmailDispatch) {
+      const dispatch = dependencies.requestFounderEmailDispatch().catch(() => {
+        log(
+          dependencies,
+          startedAt,
+          "founder_email_dispatch_failed",
+          correlationId,
+          {
+            stage: "founder_email_dispatch",
+            reason: "dispatch_unavailable",
+          },
+        );
+      });
+      if (dependencies.defer) dependencies.defer(dispatch);
+      else void dispatch;
+    }
     return json(200, { processed: true, result });
   };
 }
@@ -614,6 +632,35 @@ function createMercadoPagoProvider(accessToken?: string): PaymentProvider {
   };
 }
 
+export function createFounderEmailDispatchRequester(
+  dispatchUrl?: string,
+  secret?: string,
+  fetcher: typeof fetch = fetch,
+): () => Promise<void> {
+  return async () => {
+    if (!dispatchUrl || !secret) {
+      throw new Error("missing_dispatch_configuration");
+    }
+    const url = new URL(dispatchUrl);
+    if (
+      url.protocol !== "https:" || url.username || url.password || url.search ||
+      url.hash
+    ) {
+      throw new Error("invalid_dispatch_configuration");
+    }
+    const response = await fetcher(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${secret}`,
+      },
+      body: JSON.stringify({ action: "dispatch", limit: 3 }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) throw new Error("dispatch_failed");
+  };
+}
+
 if (import.meta.main) {
   const config: WebhookConfig = {
     webhookSecret: Deno.env.get("MERCADO_PAGO_WEBHOOK_SECRET"),
@@ -627,6 +674,9 @@ if (import.meta.main) {
     supabaseUrl: Deno.env.get("SUPABASE_URL"),
     supabaseServiceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
   };
+  const runtime = globalThis as typeof globalThis & {
+    EdgeRuntime?: { waitUntil: (work: Promise<void>) => void };
+  };
   Deno.serve(createWebhookHandler({
     config,
     provider: createMercadoPagoProvider(config.mercadoPagoAccessToken),
@@ -634,6 +684,13 @@ if (import.meta.main) {
       config.supabaseUrl,
       config.supabaseServiceRoleKey,
     ),
+    requestFounderEmailDispatch: createFounderEmailDispatchRequester(
+      Deno.env.get("ECO_FOUNDER_EMAIL_DISPATCH_URL"),
+      Deno.env.get("ECO_FOUNDER_EMAIL_SECRET"),
+    ),
+    defer: runtime.EdgeRuntime?.waitUntil
+      ? (work) => runtime.EdgeRuntime!.waitUntil(work)
+      : (work) => void work,
     logger: {
       info: (entry) => console.info(JSON.stringify(entry)),
     },

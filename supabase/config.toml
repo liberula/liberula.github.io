@@ -24,3 +24,10 @@ verify_jwt = false
 
 [functions.eco-automatic-delivery-dispatch]
 verify_jwt = false
+
+[functions.eco-founder-post-purchase-dispatch]
+verify_jwt = false
+
+[functions.eco-founder-record]
+verify_jwt = false
+static_files = ["./functions/eco-founder-record/assets/quina-final-transmission.png"]

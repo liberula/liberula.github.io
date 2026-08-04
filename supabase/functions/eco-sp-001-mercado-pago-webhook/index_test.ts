@@ -159,6 +159,8 @@ function run(overrides: {
   provider?: MemoryProvider;
   repository?: MemoryRepository;
   config?: WebhookConfig;
+  requestFounderEmailDispatch?: () => Promise<void>;
+  defer?: (work: Promise<void>) => void;
 } = {}) {
   const provider = overrides.provider ?? new MemoryProvider();
   const repository = overrides.repository ?? new MemoryRepository();
@@ -171,6 +173,8 @@ function run(overrides: {
       config: overrides.config ?? config,
       provider,
       repository,
+      requestFounderEmailDispatch: overrides.requestFounderEmailDispatch,
+      defer: overrides.defer,
       logger: { info: (entry) => logs.push(entry) },
     }),
   };
@@ -242,6 +246,40 @@ Deno.test("valid signed approved payment is reconciled and stored", async () => 
     ),
     "correlation metadata was not hashed",
   );
+});
+
+Deno.test("only an authoritative paid result requests deferred founder email dispatch", async () => {
+  let dispatchCalls = 0;
+  const deferred: Promise<void>[] = [];
+  const paid = run({
+    requestFounderEmailDispatch: () => {
+      dispatchCalls += 1;
+      return Promise.resolve();
+    },
+    defer: (work) => deferred.push(work),
+  });
+  assert(
+    (await paid.handler(webhookRequest())).status === 200,
+    "paid webhook failed",
+  );
+  assert(dispatchCalls === 1, "paid did not request founder email dispatch");
+  assert(deferred.length === 1, "email dispatch was not detached from webhook");
+  await Promise.all(deferred);
+
+  const pendingProvider = new MemoryProvider();
+  pendingProvider.value = payment({ status: "pending" });
+  const pending = run({
+    provider: pendingProvider,
+    requestFounderEmailDispatch: () => {
+      dispatchCalls += 1;
+      return Promise.resolve();
+    },
+  });
+  assert(
+    (await pending.handler(webhookRequest())).status === 200,
+    "pending webhook failed",
+  );
+  assert(dispatchCalls === 1, "non-paid webhook requested founder email");
 });
 
 Deno.test("authoritative paid referral conversion is accepted and logged once", async () => {
