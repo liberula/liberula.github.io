@@ -167,7 +167,7 @@ export default function PurchaseExperience() {
       >
         <h2 id="eco-purchase-summary">Reserva de acesso fundador</h2>
         <FounderProgress phase={campaignPhase} campaign={campaign} />
-        <strong className={styles.price}>R$ 49,90</strong>
+        <strong className={styles.price}>R$ 29,90</strong>
         <dl className={styles.offerFacts}>
           <div>
             <dt>Formato</dt>

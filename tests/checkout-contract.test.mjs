@@ -102,6 +102,22 @@ for (const [name, value] of [
     },
   ],
   [
+    "checkout URL with embedded credentials",
+    {
+      checkoutUrl:
+        "https://user:password@www.mercadopago.com.br/checkout/v1/redirect",
+      orderReference: "reference",
+    },
+  ],
+  [
+    "checkout URL with a custom port",
+    {
+      checkoutUrl:
+        "https://www.mercadopago.com.br:8443/checkout/v1/redirect",
+      orderReference: "reference",
+    },
+  ],
+  [
     "missing order reference",
     {
       checkoutUrl:

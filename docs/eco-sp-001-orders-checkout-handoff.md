@@ -78,7 +78,7 @@ key.
    - created, updated, and provider-status timestamps.
 3. Add database checks fixing this product to:
    - `case_id = 'eco-sp-001'`;
-   - new orders use `amount_cents = 4990`;
+   - new orders use `amount_cents = 2990`;
    - `currency = 'BRL'`;
    - an allowed status set.
 4. Add uniqueness constraints for the idempotency key, public reference,
@@ -102,7 +102,7 @@ key.
    buyer values.
 6. Define these values as server constants:
    - case ID: `eco-sp-001`;
-   - amount: `4990` cents / `49.90`;
+   - amount: `2990` cents / `29.90`;
    - currency: `BRL`;
    - product title approved by the later backend plan;
    - initial status: `pending`.
@@ -114,7 +114,7 @@ key.
    `POST https://api.mercadopago.com/checkout/preferences`, a Bearer sandbox
    access token, and an API idempotency key where supported.
 10. Set one digital item with quantity `1`, currency `BRL`, and numeric unit
-    price `49.90`. Populate only payer contact fields; do not create shipping
+    price `29.90`. Populate only payer contact fields; do not create shipping
     data for the digital mission.
 11. Set `external_reference` to the internal order identifier or another unique
     immutable value stored on that order.

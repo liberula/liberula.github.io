@@ -1,13 +1,16 @@
 const BODY_LIMIT = 16 * 1024;
+const MERCADO_PAGO_TIMEOUT_MS = 10_000;
 const PAYMENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,200}$/;
 const EXTERNAL_REFERENCE_PATTERN = /^eco_[a-f0-9]{32}$/;
 const HEX_SHA256_PATTERN = /^[a-fA-F0-9]{64}$/;
 
 type JsonObject = Record<string, unknown>;
+type MercadoPagoEnvironment = "development" | "test" | "production";
 
 export type WebhookConfig = {
   webhookSecret?: string;
   mercadoPagoAccessToken?: string;
+  mercadoPagoEnvironment?: MercadoPagoEnvironment;
   expectedCollectorId?: string;
   supabaseUrl?: string;
   supabaseServiceRoleKey?: string;
@@ -18,6 +21,7 @@ export type AuthoritativePayment = {
   liveMode: boolean;
   collectorId: string;
   externalReference: string;
+  preferenceId: string | null;
   currency: string;
   amount: number;
   status: string;
@@ -29,6 +33,7 @@ export type StoredOrder = {
   amountCents: number;
   currency: string;
   externalReference: string;
+  preferenceId: string;
   providerPaymentId: string | null;
 };
 
@@ -255,6 +260,9 @@ function completeConfig(config: WebhookConfig): boolean {
   return Boolean(
     config.webhookSecret &&
       config.mercadoPagoAccessToken &&
+      (config.mercadoPagoEnvironment === "development" ||
+        config.mercadoPagoEnvironment === "test" ||
+        config.mercadoPagoEnvironment === "production") &&
       config.expectedCollectorId &&
       /^[0-9]{1,30}$/u.test(config.expectedCollectorId) &&
       config.supabaseUrl &&
@@ -385,12 +393,15 @@ export function createWebhookHandler(dependencies: WebhookDependencies) {
       : payment.currency !== "BRL"
       ? "currency_mismatch"
       : !Number.isFinite(payment.amount) ||
-          ![49.90, 79.90].includes(payment.amount)
+          ![29.90, 49.90, 79.90].includes(payment.amount)
       ? "amount_mismatch"
       : !mappedStatus || Number.isNaN(providerUpdatedAt)
       ? "invalid_status"
       : payment.collectorId !== dependencies.config.expectedCollectorId
       ? "collector_mismatch"
+      : payment.liveMode !==
+          (dependencies.config.mercadoPagoEnvironment === "production")
+      ? "environment_mismatch"
       : null;
     if (paymentRejection) {
       log(dependencies, startedAt, paymentRejection, correlationId, {
@@ -422,9 +433,11 @@ export function createWebhookHandler(dependencies: WebhookDependencies) {
     if (
       order.externalReference !== payment.externalReference ||
       order.caseId !== "eco-sp-001" ||
-      ![4990, 7990].includes(order.amountCents) ||
+      ![2990, 4990, 7990].includes(order.amountCents) ||
       order.amountCents !== Math.round(payment.amount * 100) ||
       order.currency !== "BRL" ||
+      (payment.preferenceId !== null &&
+        order.preferenceId !== payment.preferenceId) ||
       (order.providerPaymentId !== null &&
         order.providerPaymentId !== payment.id)
     ) {
@@ -513,7 +526,7 @@ function createSupabaseRepository(
       const query = new URLSearchParams({
         external_reference: `eq.${externalReference}`,
         select:
-          "case_id,amount_cents,currency,external_reference,provider_payment_id",
+          "case_id,amount_cents,currency,external_reference,mercado_pago_preference_id,provider_payment_id",
         limit: "1",
       });
       const response = await fetch(`${url}/rest/v1/eco_orders?${query}`, {
@@ -527,6 +540,7 @@ function createSupabaseRepository(
         amountCents: Number(rows[0].amount_cents),
         currency: String(rows[0].currency),
         externalReference: String(rows[0].external_reference),
+        preferenceId: String(rows[0].mercado_pago_preference_id ?? ""),
         providerPaymentId: typeof rows[0].provider_payment_id === "string"
           ? rows[0].provider_payment_id
           : null,
@@ -565,6 +579,7 @@ function createMercadoPagoProvider(accessToken?: string): PaymentProvider {
     if (!accessToken) throw new Error("invalid_provider_configuration");
     const response = await fetch(`https://api.mercadopago.com${path}`, {
       headers: { "Authorization": `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(MERCADO_PAGO_TIMEOUT_MS),
     });
     if (response.status === 404) return null;
     if (!response.ok) throw new Error("provider_request_failed");
@@ -584,6 +599,12 @@ function createMercadoPagoProvider(accessToken?: string): PaymentProvider {
         liveMode: value.live_mode === true,
         collectorId: String(value.collector_id ?? ""),
         externalReference: String(value.external_reference ?? ""),
+        preferenceId: typeof value.preference_id === "string"
+          ? value.preference_id
+          : isPlainObject(value.metadata) &&
+              typeof value.metadata.preference_id === "string"
+          ? value.metadata.preference_id
+          : null,
         currency: String(value.currency_id ?? ""),
         amount: Number(value.transaction_amount),
         status: String(value.status ?? ""),
@@ -597,6 +618,11 @@ if (import.meta.main) {
   const config: WebhookConfig = {
     webhookSecret: Deno.env.get("MERCADO_PAGO_WEBHOOK_SECRET"),
     mercadoPagoAccessToken: Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"),
+    mercadoPagoEnvironment: Deno.env.get("MERCADO_PAGO_ENVIRONMENT") as
+      | "development"
+      | "test"
+      | "production"
+      | undefined,
     expectedCollectorId: Deno.env.get("MERCADO_PAGO_COLLECTOR_ID"),
     supabaseUrl: Deno.env.get("SUPABASE_URL"),
     supabaseServiceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),

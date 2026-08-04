@@ -1,5 +1,6 @@
 const VALIDATE_BODY_LIMIT = 4 * 1024;
 const ORDER_BODY_LIMIT = 16 * 1024;
+const MERCADO_PAGO_TIMEOUT_MS = 10_000;
 const ANSWER_MAX_LENGTH = 200;
 const MAX_ANSWER_ALIASES = 100;
 const ORDER_REFERENCE_PATTERN = /^[A-Za-z0-9_-]{16,200}$/;
@@ -22,9 +23,9 @@ const PRODUCTION_ORIGINS = new Set([
 
 export const ECO_PRODUCT = Object.freeze({
   caseId: "eco-sp-001",
-  title: "Próxima missão digital E.C.O. | Acesso Fundador",
-  amountCents: 4990,
-  unitPrice: 49.90,
+  title: "Próximo Caso E.C.O. | Lote Fundador",
+  amountCents: 2990,
+  unitPrice: 29.90,
   currency: "BRL",
   quantity: 1,
   initialStatus: "pending",
@@ -37,6 +38,7 @@ export const ECO_CAMPAIGN = Object.freeze({
 });
 
 type JsonObject = Record<string, unknown>;
+type MercadoPagoEnvironment = "development" | "test" | "production";
 
 export type Buyer = {
   name: string;
@@ -139,7 +141,8 @@ export type EcoApiConfig = {
   supabaseUrl?: string;
   supabaseServiceRoleKey?: string;
   mercadoPagoAccessToken?: string;
-  mercadoPagoEnvironment?: "test" | "production";
+  mercadoPagoEnvironment?: MercadoPagoEnvironment;
+  paymentsEnabled?: boolean;
   statusRateLimitSalt?: string;
 };
 
@@ -432,15 +435,18 @@ function requestRoute(request: Request): string {
 
 function configuredCheckoutUrl(
   value: string,
-  environment: "test" | "production",
+  environment: MercadoPagoEnvironment,
 ): string | null {
   try {
     const url = new URL(value);
     if (
       url.protocol !== "https:" ||
-      !(environment === "test"
-        ? SANDBOX_CHECKOUT_HOSTS
-        : PRODUCTION_CHECKOUT_HOSTS).has(url.hostname)
+      url.username !== "" ||
+      url.password !== "" ||
+      url.port !== "" ||
+      !(environment === "production"
+        ? PRODUCTION_CHECKOUT_HOSTS
+        : SANDBOX_CHECKOUT_HOSTS).has(url.hostname)
     ) {
       return null;
     }
@@ -472,6 +478,12 @@ function webhookUrl(supabaseUrl: string): string | null {
 function orderConfigurationIssue(
   config: EcoApiConfig,
 ): { errorCode: string; safeMessage: string; missingKey?: string } | null {
+  if (config.paymentsEnabled !== true) {
+    return {
+      errorCode: "payments_disabled",
+      safeMessage: "new payment creation is disabled",
+    };
+  }
   for (
     const [key, present] of [
       ["SUPABASE_URL", Boolean(config.supabaseUrl)],
@@ -479,6 +491,7 @@ function orderConfigurationIssue(
       ["MERCADO_PAGO_ACCESS_TOKEN", Boolean(config.mercadoPagoAccessToken)],
       [
         "MERCADO_PAGO_ENVIRONMENT",
+        config.mercadoPagoEnvironment === "development" ||
         config.mercadoPagoEnvironment === "test" ||
         config.mercadoPagoEnvironment === "production",
       ],
@@ -646,6 +659,23 @@ async function handleOrder(
       { missingKey: configurationIssue.missingKey },
     );
     return json(503, { error: "service_unavailable" }, origin);
+  }
+  if (
+    config.mercadoPagoEnvironment === "production" &&
+    !PRODUCTION_ORIGINS.has(origin)
+  ) {
+    logOrderFailure(
+      dependencies,
+      requestId,
+      "production_origin_validation",
+      new OperationalError(
+        "application",
+        "invalid_production_origin",
+        "production checkout requires an approved site origin",
+      ),
+      startedAt,
+    );
+    return json(403, { error: "request_rejected" }, origin);
   }
   if (!isJsonContentType(request.headers.get("content-type"))) {
     return json(415, { error: "invalid_request" }, origin);
@@ -1340,11 +1370,16 @@ export function createSupabaseOrderRepository(
 export function createMercadoPagoAdapter(
   accessToken?: string,
   fetcher: typeof fetch = fetch,
-  environment: "test" | "production" = "test",
+  environment?: MercadoPagoEnvironment,
 ): MercadoPagoAdapter {
   return {
     async createPreference(request) {
-      if (!accessToken) {
+      if (
+        !accessToken ||
+        (environment !== "development" &&
+          environment !== "test" &&
+          environment !== "production")
+      ) {
         throw new OperationalError(
           "application",
           "missing_configuration",
@@ -1360,6 +1395,7 @@ export function createMercadoPagoAdapter(
             "Authorization": `Bearer ${accessToken}`,
             "X-Idempotency-Key": request.providerIdempotencyKey,
           },
+          signal: AbortSignal.timeout(MERCADO_PAGO_TIMEOUT_MS),
           body: JSON.stringify({
             items: [{
               title: request.item.title,
@@ -1414,12 +1450,14 @@ export function createMercadoPagoAdapter(
       return {
         preferenceId: typeof value.id === "string" ? value.id : "",
         checkoutUrl: typeof (
-            environment === "test" ? value.sandbox_init_point : value.init_point
+            environment === "production"
+              ? value.init_point
+              : value.sandbox_init_point
           ) === "string"
           ? String(
-            environment === "test"
-              ? value.sandbox_init_point
-              : value.init_point,
+            environment === "production"
+              ? value.init_point
+              : value.sandbox_init_point,
           )
           : "",
       };
@@ -1436,9 +1474,11 @@ if (import.meta.main) {
     supabaseServiceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
     mercadoPagoAccessToken: Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"),
     mercadoPagoEnvironment: Deno.env.get("MERCADO_PAGO_ENVIRONMENT") as
+      | "development"
       | "test"
       | "production"
       | undefined,
+    paymentsEnabled: Deno.env.get("ECO_PAYMENTS_ENABLED") === "true",
     statusRateLimitSalt: Deno.env.get("ECO_STATUS_RATE_LIMIT_SALT"),
   };
   Deno.serve(createEcoApiHandler({

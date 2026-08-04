@@ -21,6 +21,7 @@ const COLLECTOR_ID = "3575880016";
 const config: WebhookConfig = {
   webhookSecret: SECRET,
   mercadoPagoAccessToken: "APP_USR-synthetic-test-access-token",
+  mercadoPagoEnvironment: "test",
   expectedCollectorId: COLLECTOR_ID,
   supabaseUrl: "https://synthetic-project.supabase.co",
   supabaseServiceRoleKey: "synthetic-service-role",
@@ -48,8 +49,9 @@ function payment(
     liveMode: false,
     collectorId: COLLECTOR_ID,
     externalReference: EXTERNAL_REFERENCE,
+    preferenceId: "synthetic-preference-id",
     currency: "BRL",
-    amount: 49.90,
+    amount: 29.90,
     status: "approved",
     updatedAt: "2026-07-29T12:00:00.000Z",
     ...patch,
@@ -71,9 +73,10 @@ class MemoryProvider implements PaymentProvider {
 class MemoryRepository implements PaymentRepository {
   order: StoredOrder | null = {
     caseId: "eco-sp-001",
-    amountCents: 4990,
+    amountCents: 2990,
     currency: "BRL",
     externalReference: EXTERNAL_REFERENCE,
+    preferenceId: "synthetic-preference-id",
     providerPaymentId: null,
   };
   orderStatus = "pending";
@@ -286,6 +289,7 @@ Deno.test("missing or invalid environment configuration fails closed without det
   for (
     const incomplete of [
       { ...config, webhookSecret: undefined },
+      { ...config, mercadoPagoEnvironment: undefined },
       { ...config, expectedCollectorId: undefined },
       { ...config, supabaseServiceRoleKey: undefined },
     ]
@@ -345,8 +349,8 @@ const paymentMismatchCases: Array<[string, Partial<AuthoritativePayment>]> = [
   ["signed resource", { id: "999" }],
   ["external reference", { externalReference: "invalid" }],
   ["currency", { currency: "USD" }],
-  ["amount", { amount: 49.91 }],
-  ["fractional-cent amount", { amount: 49.904 }],
+  ["amount", { amount: 29.91 }],
+  ["fractional-cent amount", { amount: 29.904 }],
   ["unsupported status", { status: "charged_back" }],
   ["provider timestamp", { updatedAt: "not-a-date" }],
 ];
@@ -372,6 +376,7 @@ const orderMismatchCases: Array<[string, Partial<StoredOrder>]> = [
   ["case", { caseId: "eco-other" }],
   ["amount", { amountCents: 1 }],
   ["currency", { currency: "USD" }],
+  ["preference ID", { preferenceId: "different-preference" }],
   ["payment ID", { providerPaymentId: "different-payment" }],
 ];
 
@@ -507,40 +512,50 @@ Deno.test("authoritative newer refund moves paid to refunded", async () => {
   );
 });
 
-Deno.test("all notification and payment live_mode combinations are diagnostic only", async () => {
-  for (
-    const [notificationMode, authoritativeMode] of [
-      [false, false],
-      [false, true],
-      [true, false],
-      [true, true],
-    ] as const
-  ) {
-    const provider = new MemoryProvider();
-    provider.value = payment({ liveMode: authoritativeMode });
-    const context = run({ provider });
-    const response = await context.handler(webhookRequest({
-      body: {
-        live_mode: notificationMode,
-        type: "payment",
-        data: { id: PAYMENT_ID },
-      },
-    }));
-    assert(response.status === 200, "authoritative validation should decide");
-    assert(
-      context.repository.orderStatus === "paid",
-      "live_mode prevented approved payment processing",
-    );
-    const serialized = JSON.stringify(context.logs);
-    assert(
-      serialized.includes(`"notificationLiveMode":${notificationMode}`),
-      "notification live mode missing from safe diagnostics",
-    );
-    assert(
-      serialized.includes(`"paymentLiveMode":${authoritativeMode}`),
-      "payment live mode missing from safe diagnostics",
-    );
-  }
+Deno.test("authoritative payment live_mode must match the configured environment", async () => {
+  const testProvider = new MemoryProvider();
+  testProvider.value = payment({ liveMode: true });
+  const testContext = run({ provider: testProvider });
+  const rejectedTest = await testContext.handler(webhookRequest());
+  assert(rejectedTest.status === 200, "mode mismatch should be acknowledged");
+  assert(
+    testContext.repository.processCalls === 0,
+    "live payment reached test DB",
+  );
+
+  const developmentProvider = new MemoryProvider();
+  developmentProvider.value = payment({ liveMode: false });
+  const development = run({
+    provider: developmentProvider,
+    config: { ...config, mercadoPagoEnvironment: "development" },
+  });
+  const acceptedDevelopment = await development.handler(webhookRequest());
+  assert(
+    acceptedDevelopment.status === 200,
+    "sandbox payment should process in development",
+  );
+  assert(
+    development.repository.orderStatus === "paid",
+    "development sandbox payment was not stored",
+  );
+
+  const productionProvider = new MemoryProvider();
+  productionProvider.value = payment({ liveMode: true });
+  const production = run({
+    provider: productionProvider,
+    config: { ...config, mercadoPagoEnvironment: "production" },
+  });
+  const acceptedProduction = await production.handler(webhookRequest({
+    body: { live_mode: true, type: "payment", data: { id: PAYMENT_ID } },
+  }));
+  assert(
+    acceptedProduction.status === 200,
+    "live payment should process in production",
+  );
+  assert(
+    production.repository.orderStatus === "paid",
+    "live payment was not stored",
+  );
 });
 
 Deno.test("collector mismatch is permanent and never mutates the order", async () => {

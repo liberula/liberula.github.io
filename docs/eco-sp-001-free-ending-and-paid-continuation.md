@@ -44,7 +44,7 @@ participants.
 
 The offer is exclusively digital:
 
-- founder price: `R$ 49,90`;
+- founder price: `R$ 29,90`;
 - goal: 100 participants;
 - delivery: up to 90 days after the goal is reached;
 - failed goal: full refund through the original payment method;
@@ -62,9 +62,10 @@ by the existing backend configuration.
 The browser sends only buyer name, email, and WhatsApp. The Edge Function no
 longer builds Mercado Pago shipment data. Migration
 `20260803000000_convert_eco_founder_to_digital.sql` makes legacy delivery
-columns nullable, changes the default order amount to 4990 cents, and preserves
-historical 7990-cent order integrity. Existing payment idempotency, referral,
-status, webhook, and return contracts remain in place.
+columns nullable. `20260804000000_set_eco_founder_price_2990.sql` sets new
+orders to 2990 cents while preserving historical 4990- and 7990-cent order
+integrity. Existing payment idempotency, referral, status, webhook, and return
+contracts remain in place.
 
 The migration and updated Edge Functions must be deployed together by an
 operator. This implementation does not apply migrations or deploy remote code.

@@ -26,7 +26,7 @@ type PaymentStatus =
   | "cancelled"
   | "refunded";
 
-type ViewPhase = "loading" | "ready" | "failure" | "invalid";
+type ViewPhase = "loading" | "ready" | "failure" | "invalid" | "not_found";
 
 const statusContent: Record<
   PaymentStatus,
@@ -126,6 +126,10 @@ export default function PaymentStatusView() {
           cache: "no-store",
           signal: controller.signal,
         });
+        if (response.status === 404) {
+          if (!cancelled) setPhase("not_found");
+          return;
+        }
         const body: unknown = await response.json().catch(() => null);
         const result = response.ok ? parseOrderStatusResponse(body) : null;
         if (!result) throw new Error("status_unavailable");
@@ -215,6 +219,19 @@ export default function PaymentStatusView() {
         label="CONSULTA INDISPONÍVEL"
         title="Não foi possível verificar agora"
         description="Nenhum estado foi presumido. Tente consultar novamente em instantes."
+        tone={styles.statusNegative}
+        action={() => setRefreshKey((current) => current + 1)}
+      />
+    );
+  }
+
+  if (phase === "not_found") {
+    return (
+      <StatusMessage
+        icon={FiAlertCircle}
+        label="PEDIDO NÃO ENCONTRADO"
+        title="Não foi possível localizar este pedido"
+        description="Confira se você abriu o link de retorno associado a esta compra. Nenhum pagamento foi presumido."
         tone={styles.statusNegative}
         action={() => setRefreshKey((current) => current + 1)}
       />

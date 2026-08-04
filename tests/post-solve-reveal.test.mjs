@@ -92,12 +92,12 @@ test("fiction ends before the visually distinct Liberula offer", () => {
   assert.match(css, /\.liberulaNote[\s\S]*#f2cb32/);
 });
 
-test("post-solve presentation uses R$ 29,90 without changing financial integration", () => {
+test("post-solve presentation and financial integration use R$ 29,90", () => {
   assert.match(reveal, /R\$ 29,90/);
   assert.doesNotMatch(reveal, /R\$ 49,90/);
-  assert.match(purchase, /R\$ 49,90/);
-  assert.match(api, /amountCents: 4990/);
-  assert.match(api, /unitPrice: 49\.90/);
+  assert.match(purchase, /R\$ 29,90/);
+  assert.match(api, /amountCents: 2990/);
+  assert.match(api, /unitPrice: 29\.90/);
 });
 
 test("founder CTA preserves the existing purchase and referral contract", () => {

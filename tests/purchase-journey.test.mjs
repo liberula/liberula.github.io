@@ -65,7 +65,7 @@ test("purchase CTA carries safe referral context to the dedicated route", () => 
 test("dedicated purchase page contains campaign, price, and buyer form", () => {
   assert.match(purchasePage, /<PurchaseExperience \/>/);
   assert.match(purchase, /<FounderProgress/);
-  assert.match(purchase, /R\$ 49,90/);
+  assert.match(purchase, /R\$ 29,90/);
   assert.match(purchase, /Até 90 dias após a meta ser atingida/);
   assert.match(purchase, /60 a 120 minutos/);
   assert.doesNotMatch(purchase, /Endereço de entrega|dossiê físico/iu);
@@ -93,6 +93,8 @@ test("checkout returns to comprar and only backend status confirms payment", () 
   assert.match(status, /parseOrderStatusResponse/);
   assert.match(status, /eco_payment_pending_viewed/);
   assert.match(status, /eco_payment_confirmed_viewed/);
+  assert.match(status, /PEDIDO NÃO ENCONTRADO/);
+  assert.match(status, /response\.status === 404/);
   assert.doesNotMatch(purchase, /collection_status.*paid|status.*approved/s);
 });
 

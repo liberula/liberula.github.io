@@ -53,6 +53,9 @@ export function parseOrderResponse(value) {
     const checkoutUrl = new URL(value.checkoutUrl);
     if (
       checkoutUrl.protocol !== "https:" ||
+      checkoutUrl.username !== "" ||
+      checkoutUrl.password !== "" ||
+      checkoutUrl.port !== "" ||
       !TRUSTED_CHECKOUT_HOSTS.has(checkoutUrl.hostname)
     ) {
       return null;

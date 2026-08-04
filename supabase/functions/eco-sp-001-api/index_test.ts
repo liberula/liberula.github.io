@@ -34,6 +34,7 @@ const completeConfig: EcoApiConfig = {
   supabaseServiceRoleKey: "synthetic-service-role",
   mercadoPagoAccessToken: "TEST-synthetic-access-token",
   mercadoPagoEnvironment: "test",
+  paymentsEnabled: true,
   statusRateLimitSalt: "synthetic-rate-limit-salt-32bytes",
 };
 
@@ -61,6 +62,7 @@ function deferred<T>() {
 
 class MemoryOrders implements OrderRepository {
   byKey = new Map<string, OrderRecord>();
+  buyerByKey = new Map<string, Buyer>();
   byReference = new Map<string, OrderRecord>();
   claimToken: string | null = null;
   createCalls = 0;
@@ -93,7 +95,7 @@ class MemoryOrders implements OrderRepository {
 
   createOrGet(
     idempotencyKey: string,
-    _buyer: Buyer,
+    buyer: Buyer,
     siteOrigin: string,
     referralCode: string | null,
   ): Promise<OrderRecord> {
@@ -103,7 +105,15 @@ class MemoryOrders implements OrderRepository {
       return Promise.reject(new Error("synthetic database failure"));
     }
     const existing = this.byKey.get(idempotencyKey);
-    if (existing) return Promise.resolve(existing);
+    if (existing) {
+      if (
+        JSON.stringify(this.buyerByKey.get(idempotencyKey)) !==
+          JSON.stringify(buyer)
+      ) {
+        return Promise.reject(new Error("idempotency mismatch"));
+      }
+      return Promise.resolve(existing);
+    }
     const order: OrderRecord = {
       orderReference: ORDER_REFERENCE,
       externalReference: "eco_synthetic_external_reference",
@@ -115,6 +125,7 @@ class MemoryOrders implements OrderRepository {
       referralAttributed: referralCode === "ABCDEF123456",
     };
     this.byKey.set(idempotencyKey, order);
+    this.buyerByKey.set(idempotencyKey, buyer);
     this.byReference.set(order.orderReference, order);
     return Promise.resolve(order);
   }
@@ -618,7 +629,7 @@ Deno.test("order request normalizes buyer and fixes all commerce fields", async 
     title: ECO_PRODUCT.title,
     quantity: 1,
     currencyId: "BRL",
-    unitPrice: 49.9,
+    unitPrice: 29.9,
   }, "commerce values were not fixed");
   assert(request.buyer.name === "Ana Júlia", "name not normalized");
   assert(request.buyer.email === "ana@example.com", "email not normalized");
@@ -714,6 +725,24 @@ Deno.test("serial duplicate requests create one preference and return the same o
   assert(provider.calls.length === 1, "duplicate provider request");
   assert(orders.byKey.size === 1, "duplicate internal order");
   assertEquals(await first.json(), await second.json(), "responses differ");
+});
+
+Deno.test("an idempotency key cannot be reused for another buyer", async () => {
+  const context = dependencies();
+  assert(
+    (await context.handler(orderRequest())).status === 201,
+    "first order failed",
+  );
+  const response = await context.handler(orderRequest({
+    ...validBuyer,
+    email: "other@example.com",
+  }));
+  assert(response.status === 503, "mismatched retry should fail closed");
+  assert(
+    context.provider.calls.length === 1,
+    "mismatched retry created a preference",
+  );
+  assert(context.orders.byKey.size === 1, "mismatched retry created an order");
 });
 
 Deno.test("concurrent duplicate request is controlled while one worker owns the claim", async () => {
@@ -813,6 +842,82 @@ Deno.test("production configuration accepts only the provider production URL", a
   assert(orders.releaseCalls === 0, "valid preference claim was released");
 });
 
+Deno.test("production checkout rejects localhost and preview return origins", async () => {
+  for (
+    const origin of [
+      "http://localhost:3000",
+      "https://preview.example.pages.dev",
+    ]
+  ) {
+    const provider = new CapturingProvider();
+    provider.response.checkoutUrl =
+      "https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=live";
+    const { handler } = dependencies({
+      provider,
+      config: { ...completeConfig, mercadoPagoEnvironment: "production" },
+    });
+    const response = await handler(apiRequest("/orders", {
+      origin,
+      body: { buyer: validBuyer },
+      idempotencyKey: IDEMPOTENCY_KEY,
+    }));
+    assert(
+      response.status === 403,
+      `${origin} should not create live checkout`,
+    );
+    assert(
+      provider.calls.length === 0,
+      "provider called for an unsafe return origin",
+    );
+  }
+});
+
+Deno.test("development permits localhost and returns only a sandbox checkout", async () => {
+  const provider = new CapturingProvider();
+  const { handler } = dependencies({
+    provider,
+    config: { ...completeConfig, mercadoPagoEnvironment: "development" },
+  });
+  const response = await handler(apiRequest("/orders", {
+    origin: "http://localhost:3000",
+    body: { buyer: validBuyer },
+    idempotencyKey: IDEMPOTENCY_KEY,
+  }));
+  assert(
+    response.status === 201,
+    "localhost sandbox checkout should be returned",
+  );
+  assert(provider.calls.length === 1, "sandbox provider was not called");
+  const payload = await response.json();
+  assert(
+    payload.checkoutUrl === CHECKOUT_URL,
+    "development returned a non-sandbox checkout URL",
+  );
+});
+
+Deno.test("production rejects sandbox, credentialed, and custom-port checkout URLs", async () => {
+  for (
+    const checkoutUrl of [
+      CHECKOUT_URL,
+      "https://user:pass@www.mercadopago.com.br/checkout/v1/redirect",
+      "https://www.mercadopago.com.br:8443/checkout/v1/redirect",
+    ]
+  ) {
+    const provider = new CapturingProvider();
+    provider.response.checkoutUrl = checkoutUrl;
+    const { handler, orders } = dependencies({
+      provider,
+      config: { ...completeConfig, mercadoPagoEnvironment: "production" },
+    });
+    const response = await handler(orderRequest());
+    assert(response.status === 502, `${checkoutUrl} should be rejected`);
+    assert(
+      orders.releaseCalls === 1,
+      "invalid production claim was not released",
+    );
+  }
+});
+
 Deno.test("APP_USR sandbox credentials reach checkout while missing configuration fails safely", async () => {
   const accepted = dependencies({
     config: {
@@ -853,48 +958,58 @@ Deno.test("APP_USR sandbox credentials reach checkout while missing configuratio
     missingEnvironment.status === 503,
     "missing checkout environment should fail closed",
   );
+
+  const disabled = await dependencies({
+    config: { ...completeConfig, paymentsEnabled: false },
+  }).handler(orderRequest());
+  assert(disabled.status === 503, "disabled payments should fail closed");
 });
 
-Deno.test("Mercado Pago adapter accepts a sandbox preference response", async () => {
-  const adapter = createMercadoPagoAdapter(
-    "APP_USR-synthetic-sandbox-token",
-    async () =>
-      new Response(
-        JSON.stringify({
-          id: "synthetic-preference-id",
-          sandbox_init_point: CHECKOUT_URL,
-          live_mode: false,
-        }),
-        { status: 201, headers: { "Content-Type": "application/json" } },
-      ),
-  );
-  const created = await adapter.createPreference({
-    item: {
-      title: ECO_PRODUCT.title,
-      quantity: 1,
-      currencyId: "BRL",
-      unitPrice: 49.90,
-    },
-    buyer: validBuyer,
-    externalReference: "synthetic-external-reference",
-    providerIdempotencyKey: IDEMPOTENCY_KEY,
-    backUrls: {
-      success: `${ORIGIN}/success`,
-      pending: `${ORIGIN}/pending`,
-      failure: `${ORIGIN}/failure`,
-    },
-    notificationUrl:
-      "https://synthetic-project.supabase.co/functions/v1/webhook",
-    autoReturn: "approved",
-  });
-  assertEquals(
-    created,
-    {
-      preferenceId: "synthetic-preference-id",
-      checkoutUrl: CHECKOUT_URL,
-    },
-    "sandbox provider response changed",
-  );
+Deno.test("Mercado Pago adapter uses sandbox in development and test modes", async () => {
+  for (const environment of ["development", "test"] as const) {
+    const adapter = createMercadoPagoAdapter(
+      "APP_USR-synthetic-sandbox-token",
+      async () =>
+        new Response(
+          JSON.stringify({
+            id: "synthetic-preference-id",
+            init_point:
+              "https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=live",
+            sandbox_init_point: CHECKOUT_URL,
+            live_mode: false,
+          }),
+          { status: 201, headers: { "Content-Type": "application/json" } },
+        ),
+      environment,
+    );
+    const created = await adapter.createPreference({
+      item: {
+        title: ECO_PRODUCT.title,
+        quantity: 1,
+        currencyId: "BRL",
+        unitPrice: 29.90,
+      },
+      buyer: validBuyer,
+      externalReference: "synthetic-external-reference",
+      providerIdempotencyKey: IDEMPOTENCY_KEY,
+      backUrls: {
+        success: `${ORIGIN}/success`,
+        pending: `${ORIGIN}/pending`,
+        failure: `${ORIGIN}/failure`,
+      },
+      notificationUrl:
+        "https://synthetic-project.supabase.co/functions/v1/webhook",
+      autoReturn: "approved",
+    });
+    assertEquals(
+      created,
+      {
+        preferenceId: "synthetic-preference-id",
+        checkoutUrl: CHECKOUT_URL,
+      },
+      `${environment} provider response changed`,
+    );
+  }
 });
 
 Deno.test("Mercado Pago adapter selects init_point only in production mode", async () => {
@@ -918,7 +1033,7 @@ Deno.test("Mercado Pago adapter selects init_point only in production mode", asy
       title: ECO_PRODUCT.title,
       quantity: 1,
       currencyId: "BRL",
-      unitPrice: 49.90,
+      unitPrice: 29.90,
     },
     buyer: validBuyer,
     externalReference: "synthetic-external-reference",
@@ -933,6 +1048,39 @@ Deno.test("Mercado Pago adapter selects init_point only in production mode", asy
     autoReturn: "approved",
   });
   assertEquals(created.checkoutUrl, productionUrl, "wrong production URL");
+});
+
+Deno.test("Mercado Pago adapter has no implicit environment fallback", async () => {
+  const adapter = createMercadoPagoAdapter(
+    "APP_USR-synthetic-token",
+    async () => new Response("{}", { status: 201 }),
+    undefined,
+  );
+  let failed = false;
+  try {
+    await adapter.createPreference({
+      item: {
+        title: ECO_PRODUCT.title,
+        quantity: 1,
+        currencyId: "BRL",
+        unitPrice: 29.90,
+      },
+      buyer: validBuyer,
+      externalReference: "synthetic-external-reference",
+      providerIdempotencyKey: IDEMPOTENCY_KEY,
+      backUrls: {
+        success: `${ORIGIN}/success`,
+        pending: `${ORIGIN}/pending`,
+        failure: `${ORIGIN}/failure`,
+      },
+      notificationUrl:
+        "https://synthetic-project.supabase.co/functions/v1/webhook",
+      autoReturn: "approved",
+    });
+  } catch {
+    failed = true;
+  }
+  assert(failed, "adapter silently selected an environment");
 });
 
 Deno.test("Mercado Pago failures and invalid JSON produce safe diagnostics", async () => {
@@ -966,6 +1114,7 @@ Deno.test("Mercado Pago failures and invalid JSON produce safe diagnostics", asy
       mercadoPago: createMercadoPagoAdapter(
         token,
         async () => response.clone(),
+        "test",
       ),
       sleep: () => Promise.resolve(),
       logger: {
