@@ -12,7 +12,7 @@ const HINT_STORAGE_KEY = "eco-sp-001:hint-level";
 const HINTS = [
   "Compare os pontos intermediários registrados em cada uma das três ocorrências.",
   "No mapa, observe a direção seguida por cada rota depois do último ponto confirmado.",
-  "As três rotas convergem na região da Sé, próximas à Rua Benjamin Constant.",
+  "Segundo nossos agentes, a rua que você procura desemboca na Praça da Sé.",
 ] as const;
 
 type SubmissionState =

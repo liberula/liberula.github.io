@@ -1898,6 +1898,12 @@
   background: #171815;
 }
 
+.liberulaNote .founderProgress strong,
+.liberulaNote .founderProgress p,
+.liberulaNote .progressFallback p {
+  color: #171815;
+}
+
 .digitalCampaignFacts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1953,6 +1959,29 @@
   margin-top: 26px;
   color: #171815;
   font-weight: 750;
+}
+
+.liberulaFooter {
+  margin-top: 38px;
+  padding-top: 24px;
+  border-top: 2px solid rgba(23, 24, 21, 0.42);
+}
+
+.liberulaFooter p {
+  margin: 0;
+  color: #171815;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.liberulaFooter a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  color: #171815;
+  font: 850 0.82rem/1.4 monospace;
+  letter-spacing: 0.035em;
 }
 
 @media (max-width: 720px) {
@@ -2216,7 +2245,7 @@
     #101212;
 }
 
-.postSolvePassage .narrativeAssetPending {
+.postSolvePassage .postSolveEvidence {
   margin-top: 32px;
 }
 

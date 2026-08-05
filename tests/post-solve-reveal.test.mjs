@@ -62,19 +62,13 @@ test("the final status stays unknown and the entity is never explained", () => {
   assert.doesNotMatch(reveal, /Quina morreu|criatura|monstro|entidade era|origem da passagem/iu);
 });
 
-test("approved repository assets replace matching placeholders", () => {
+test("approved repository assets replace every narrative placeholder", () => {
   assert.match(reveal, /src="\/eco\/eco-sp-001\/agent-field-record\.png"/);
+  assert.match(reveal, /src="\/eco\/eco-sp-001\/postsolve-jonas-threshold\.png"/);
   assert.match(reveal, /src="\/eco\/eco-sp-001\/white-room-evidence\.png"/);
+  assert.match(reveal, /src="\/eco\/eco-sp-001\/postsolve-quina-final-record\.png"/);
   assert.match(reveal, /data-asset-status="final"/);
-  assert.doesNotMatch(reveal, /assetId="eco-sp-001-postsolve-room-threshold"/);
-  assert.equal((reveal.match(/<PendingAsset/g) ?? []).length, 2);
-  for (const [id, ratio] of [
-    ["eco-sp-001-postsolve-jonas-threshold", "16:10"],
-    ["eco-sp-001-postsolve-quina-final-record", "16:9"],
-  ]) {
-    assert.ok(reveal.includes(`assetId="${id}"`), id);
-    assert.ok(reveal.includes(`ratio="${ratio}"`), ratio);
-  }
+  assert.doesNotMatch(reveal, /PendingAsset|data-asset-status="placeholder"|REGISTRO VISUAL PENDENTE/);
 });
 
 test("the final-record alt text does not announce the subtle presence", () => {
@@ -90,6 +84,14 @@ test("fiction ends before the visually distinct Liberula offer", () => {
   assert.ok(cliffhanger >= 0 && cliffhanger < note && note < price);
   assert.match(reveal, /\/eco\/liberula-mark\.svg/);
   assert.match(css, /\.liberulaNote[\s\S]*#f2cb32/);
+});
+
+test("Liberula progress copy is black and the footer links to its Instagram", () => {
+  assert.match(css, /\.liberulaNote \.founderProgress strong,[\s\S]*color: #171815/);
+  assert.match(css, /\.liberulaNote \.founderProgress p/);
+  assert.match(reveal, /Gostou\? Nos marque no insta e compartilhe com os amigos!/);
+  assert.match(reveal, /href="https:\/\/www\.instagram\.com\/liberulagames\/"/);
+  assert.match(reveal, /> @liberulagames/);
 });
 
 test("post-solve presentation and financial integration use R$ 29,90", () => {
@@ -129,11 +131,19 @@ test("responsive logs and reduced motion remain explicit", () => {
   assert.match(reveal, /prefers-reduced-motion: reduce/);
 });
 
-test("no new case image asset was added", async () => {
+test("the third hint narrows the geography without naming the answer street", () => {
+  assert.match(answer, /Segundo nossos agentes, a rua que você procura desemboca na Praça da Sé\./);
+  const hints = answer.slice(answer.indexOf("const HINTS"), answer.indexOf("] as const"));
+  assert.doesNotMatch(hints, /Benjamin Constant/);
+});
+
+test("case asset inventory contains the approved post-solve images", async () => {
   const assets = await readdir(new URL("../public/eco/eco-sp-001/", import.meta.url));
   assert.deepEqual(assets.sort(), [
     "agent-field-record.png",
     "eco-sp-001-atalho.pdf",
+    "postsolve-jonas-threshold.png",
+    "postsolve-quina-final-record.png",
     "white-room-evidence.png",
   ]);
 });

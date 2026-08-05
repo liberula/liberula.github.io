@@ -99,34 +99,6 @@ function useViewedEvents<T extends HTMLElement>(
   return elementRef;
 }
 
-function PendingAsset({
-  assetId,
-  ratio,
-  caption,
-  editorialDescription,
-}: {
-  assetId: string;
-  ratio: string;
-  caption: string;
-  editorialDescription: string;
-}) {
-  return (
-    <figure
-      className={styles.narrativeAssetPending}
-      data-asset-status="placeholder"
-      data-asset-id={assetId}
-      data-asset-ratio={ratio}
-      data-editorial-description={editorialDescription}
-    >
-      <div style={{ aspectRatio: ratio.replace(":", " / ") }} aria-hidden="true">
-        <span>REGISTRO VISUAL PENDENTE</span>
-        <code>{assetId}</code>
-      </div>
-      <figcaption>{caption}</figcaption>
-    </figure>
-  );
-}
-
 function Transmission({
   label,
   entries,
@@ -310,12 +282,16 @@ export default function PostSolveReveal({ referralCode }: { referralCode: string
           <h2 id="eco-comparison-title">No registro de Jonas, não havia passagem.</h2>
           <p className={styles.postSolveLead}>Quina alcançou o mesmo quarto, o mesmo enquadramento e a mesma porta de escritório. A arquitetura ao redor não havia mudado. O que existia depois dela, sim.</p>
           <div className={styles.postSolveComparison}>
-            <PendingAsset
-              assetId="eco-sp-001-postsolve-jonas-threshold"
-              ratio="16:10"
-              caption="REGISTRO DE JONAS / ponto correspondente, sem passagem funcional."
-              editorialDescription="Mesmo enquadramento do registro de Quina; quarto degradado; porta do escritório fechada ou abertura sem ativação; nenhuma anomalia visível."
-            />
+            <figure className={styles.postSolveEvidence} data-asset-status="final" data-asset-id="postsolve-jonas-threshold">
+              <Image
+                src="/eco/eco-sp-001/postsolve-jonas-threshold.png"
+                alt="Registro anterior no quarto de Jonas, com duas pessoas em primeiro plano e a porta aberta para um corredor comum."
+                width={1448}
+                height={1086}
+                sizes="(max-width: 720px) calc(100vw - 64px), 460px"
+              />
+              <figcaption>REGISTRO DE JONAS / ponto correspondente, sem passagem anômala.</figcaption>
+            </figure>
             <figure className={styles.postSolveEvidence} data-asset-status="final" data-asset-id="white-room-evidence">
               <Image
                 src="/eco/eco-sp-001/white-room-evidence.png"
@@ -336,12 +312,16 @@ export default function PostSolveReveal({ referralCode }: { referralCode: string
           <p className={styles.protocol}>REGISTRO AUTOMÁTICO / CANAL INSTÁVEL</p>
           <h2 id="eco-passage-title">A profundidade excedia os limites do prédio.</h2>
           <p className={styles.postSolveLead}>Portas de épocas diferentes, escadas sem continuidade e corredores ligados em ângulos incompatíveis apareciam além da entrada. Quina montou a câmera e avançou.</p>
-          <PendingAsset
-            assetId="eco-sp-001-postsolve-quina-final-record"
-            ratio="16:9"
-            caption="ÚLTIMO REGISTRO INTEGRAL / Quina diante de uma segunda porta."
-            editorialDescription="Quina pequeno e de costas diante da passagem; arquitetura impossível; superfície reflexiva plausível com presença extremamente sutil, sem marcação, zoom ou contraste artificial."
-          />
+          <figure className={styles.postSolveEvidence} data-asset-status="final" data-asset-id="postsolve-quina-final-record">
+            <Image
+              src="/eco/eco-sp-001/postsolve-quina-final-record.png"
+              alt="Registro automático de Quina, de costas, avançando pelo corredor além da porta."
+              width={1448}
+              height={1086}
+              sizes="(max-width: 720px) calc(100vw - 64px), 980px"
+            />
+            <figcaption>ÚLTIMO REGISTRO INTEGRAL / Quina avançando pelo corredor.</figcaption>
+          </figure>
           <Transmission label="Última transmissão do agente Quina" entries={FINAL_TRANSMISSION} />
         </section>
       )}
@@ -425,6 +405,13 @@ export default function PostSolveReveal({ referralCode }: { referralCode: string
               <FiInstagram aria-hidden="true" /> Acompanhar a comunidade E.C.O. no Instagram
             </a>
           )}
+
+          <footer className={styles.liberulaFooter}>
+            <p>Gostou? Nos marque no insta e compartilhe com os amigos!</p>
+            <a href="https://www.instagram.com/liberulagames/" target="_blank" rel="noopener noreferrer">
+              <FiInstagram aria-hidden="true" /> @liberulagames
+            </a>
+          </footer>
         </section>
       )}
     </section>
