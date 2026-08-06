@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Asteroid Playable</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      touch-action: none;
+      overscroll-behavior: none;
+      -webkit-touch-callout: none;
+      user-select: none;
+      -webkit-user-select: none;
+      width: 100%;
+      height: 100%;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas {
+      display: block;
+      flex: none;
+      touch-action: none;
+    }
+    #status-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 18px;
+      padding: 24px;
+      box-sizing: border-box;
+      background: #000;
+      color: rgba(255, 255, 255, 0.92);
+      font: 700 24px/1.3 sans-serif;
+      text-align: center;
+    }
+    #status-layer[hidden] {
+      display: none;
+    }
+    #status-layer.is-loading #status-message {
+      animation: loading-pulse 1.1s ease-in-out infinite alternate;
+    }
+    #retry-button {
+      border: 2px solid #3ed2d1;
+      padding: 14px 28px;
+      background: transparent;
+      color: #3ed2d1;
+      font: 700 18px sans-serif;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    @keyframes loading-pulse {
+      from { opacity: 0.42; }
+      to { opacity: 1; }
+    }
+  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="status-layer" class="is-loading" role="status" aria-live="polite">
+    <div id="status-message">LOADING</div>
+    <button id="retry-button" type="button" hidden>Tap to retry</button>
+  </div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
