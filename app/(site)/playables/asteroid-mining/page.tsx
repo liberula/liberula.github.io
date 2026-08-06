@@ -57,6 +57,11 @@ export default function AsteroidMiningPlayablePage() {
           </p>
         </section>
       </div>
+      <section className="mx-auto mt-20 max-w-6xl border-t border-neutral-800 pt-10">
+        <Link href="/playables/" className="text-sm font-bold text-[#f6c400] underline underline-offset-4">← Back to all playables</Link>
+        <p className="mt-8 text-sm font-bold uppercase tracking-[0.2em] text-neutral-500">More playable prototypes</p>
+        <Link href="/playables/spinfall/" className="mt-4 inline-block text-2xl font-black italic text-white underline decoration-[#f6c400] underline-offset-4">Spinfall →</Link>
+      </section>
     </main>
   );
 }
