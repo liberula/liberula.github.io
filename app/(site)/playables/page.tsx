@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 const projects = [
   { href: "/playables/asteroid-mining/", image: "/portfolio/asteroid-miner-poster.png", badge: "PLAYABLE AD PROTOTYPE", title: "Asteroid Mining", description: "Mine asteroids, manage weapon heat and progress toward a final CTA.", interaction: "Hold to mine" },
-  { href: "/playables/spinfall/", image: "/mobile-store/spinfall/hero.png", badge: "PLAYABLE AD PROTOTYPE", title: "Spinfall", description: "Spin a combat wheel to attack, recover and survive against a boss.", interaction: "Combat wheel" },
+  { href: "/playables/spinfall/", image: "/portfolio/spinfall-poster.png", badge: "PLAYABLE AD PROTOTYPE", title: "Spinfall", description: "Spin a combat wheel to attack, recover and survive against a boss.", interaction: "Combat wheel" },
 ];
 
 export default function PlayablesIndexPage() {

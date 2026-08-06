@@ -1,0 +1,78 @@
+.copyFirst,
+.copySecond,
+.spinfallCard,
+.asteroidCard {
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.copyFirst { animation: hero-fade-up 560ms 70ms both; }
+.copySecond { animation: hero-fade-up 560ms 210ms both; }
+
+.visuals {
+  min-height: 360px;
+  isolation: isolate;
+}
+
+.projectCard {
+  display: block;
+  width: 82%;
+}
+
+.mediaFrame {
+  position: relative;
+  height: clamp(145px, 23vw, 265px);
+  overflow: hidden;
+  background: #000;
+}
+
+.mediaImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.spinfallCard {
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 1;
+  width: 70%;
+  transform: rotate(3deg);
+  animation: hero-card-back 620ms 380ms both;
+}
+.asteroidCard {
+  position: relative;
+  z-index: 2;
+  margin-top: 90px;
+  transform: rotate(-1deg);
+  animation: hero-card-front 640ms 500ms both;
+}
+
+@keyframes hero-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes hero-card-back {
+  from { opacity: 0; transform: translate(24px, 18px) rotate(3deg); }
+  to { opacity: 1; transform: translate(0, 0) rotate(3deg); }
+}
+@keyframes hero-card-front {
+  from { opacity: 0; transform: translate(-22px, 24px) rotate(-1deg); }
+  to { opacity: 1; transform: translate(0, 0) rotate(-1deg); }
+}
+
+@media (max-width: 767px) {
+  .visuals { min-height: 300px; }
+  .projectCard { width: 88%; }
+  .spinfallCard { width: 76%; }
+  .asteroidCard { margin-top: 58px; }
+  .mediaFrame { height: clamp(135px, 48vw, 210px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copyFirst,
+  .copySecond,
+  .spinfallCard,
+  .asteroidCard { animation: none; }
+}

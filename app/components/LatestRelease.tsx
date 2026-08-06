@@ -1,18 +1,33 @@
 import Link from "next/link";
-import YellowTag from "./YellowTag";
 
 export default function LatestRelease() {
   return (
-    <section className="bg-black px-5 py-14 tablet:py-20">
+    <section className="bg-black px-5 pb-14 pt-20 tablet:px-8 tablet:pb-20 tablet:pt-24">
       <div className="mx-auto max-w-7xl">
-        <YellowTag label="Latest Release" />
+        <div className="max-w-3xl border-t border-white/10 pt-8 tablet:pt-10">
+          <div aria-hidden="true" className="mb-5 h-px w-10 bg-liberula-yellow" />
+          <p className="text-xs font-black tracking-[0.22em] text-liberula-yellow tablet:text-sm">
+            ORIGINAL GAMES
+          </p>
+          <h2 className="mt-4 text-4xl font-black leading-[0.95] tracking-tight text-white tablet:text-6xl">
+            Games built by Liberula.
+          </h2>
+          <p className="mt-5 text-base leading-7 text-white/65 tablet:text-lg">
+            Alongside client work, we develop and publish our own games.
+          </p>
+        </div>
 
-        <div className="mt-8 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04] shadow-2xl shadow-black/40">
+        <div className="mt-10 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04] shadow-2xl shadow-black/40 tablet:mt-12">
           <div className="grid gap-0 laptop:grid-cols-[1fr_0.72fr]">
             <div className="p-7 tablet:p-10 laptop:p-12">
-              <p className="text-sm font-black uppercase tracking-[0.24em] text-liberula-yellow">
-                Recoil
-              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm font-black uppercase tracking-[0.24em] text-liberula-yellow">
+                  Recoil
+                </p>
+                <span className="rounded-full border border-liberula-yellow/35 px-2.5 py-1 text-[10px] font-black tracking-[0.13em] text-liberula-yellow">
+                  LATEST RELEASE
+                </span>
+              </div>
 
               <h2 className="mt-4 max-w-3xl text-4xl font-black leading-[0.95] tracking-tight text-white tablet:text-6xl">
                 Ricochet through a minimalist arcade gauntlet.
