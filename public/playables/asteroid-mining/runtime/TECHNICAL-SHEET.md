@@ -7,7 +7,7 @@
 - Git commit: `ed02980e8f526574dffe1fc1a57958fe315e9cfc` (working tree contains ticket changes)
 - ZIP filename: `liberula-asteroid-mining-playable-prototype.zip`
 - ZIP SHA-256: See the generated `.sha256` sidecar and `audit/final/sha256.txt`
-- Public URL: Not available
+- Public URL: https://liberula.com/playables/asteroid-mining/
 
 ## Runtime
 
@@ -24,25 +24,25 @@
 
 ## Package size
 
-- Uncompressed runtime size: 1,301,490 bytes | 1,270.99 KiB | 1.24 MiB
-- ZIP size: 1,259,609 bytes | 1,230.09 KiB | 1.20 MiB
+- Uncompressed runtime size: 1,301,409 bytes | 1,270.91 KiB | 1.24 MiB
+- ZIP size: 1,259,657 bytes | 1,230.13 KiB | 1.20 MiB
 - Image size: 1,238,158 bytes | 1,209.14 KiB | 1.18 MiB
 - JavaScript size: 54,327 bytes | 53.05 KiB
 - HTML and CSS size: 1,909 bytes | 1.86 KiB
-- Documentation size: 7,096 bytes | 6.93 KiB
+- Documentation size: 7,015 bytes | 6.85 KiB
 - Other files: 0 bytes
 - Total file count: 23
 
 ## Requests
 
-- HTML requests: 1 package request; browser observation unavailable
-- JavaScript requests: 16 package requests; browser observation unavailable
-- Image requests: 4 package requests; browser observation unavailable
-- Other requests: 0 package requests; browser observation unavailable
-- Total requests: 21 package requests; browser observation unavailable
-- External requests: 0 in package references; browser observation unavailable
+- HTML requests: 1
+- JavaScript requests: 16
+- Image requests: 4
+- Other requests: 0
+- Total requests: 21
+- External requests: 0 in package references
 
-Package file counts and browser-observed requests are reported separately.
+Requests were observed by direct HTTPS checks against the published runtime. Browser performance instrumentation was unavailable.
 
 ## Loading
 
@@ -102,6 +102,8 @@ No browser environments recorded. The integrated browser was unavailable in the 
 - Isolated distribution server execution
 - Distribution verification
 - Distribution ZIP structure and checksum generation
+- Public HTTPS page, runtime and all 21 runtime resources
+- Production MIME types for HTML, JavaScript and WebP
 
 ## Not validated
 
