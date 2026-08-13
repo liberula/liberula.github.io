@@ -37,7 +37,7 @@ export default function SpinfallPlayablePage() {
           </section>
           <section className="w-full" aria-label="Spinfall playable">
             <div className="overflow-hidden border border-neutral-700 bg-black shadow-2xl shadow-black/50">
-              <iframe title="Spinfall playable ad prototype" src="/playables/spinfall/index.html" className="block aspect-[16/10] w-full border-0" allow="fullscreen" />
+              <iframe title="Spinfall playable ad prototype" src="/playables/spinfall/runtime/index.html" className="block aspect-[16/10] w-full border-0" allow="fullscreen" />
             </div>
             <p className="mt-3 text-center text-xs text-neutral-500">The playable loads from the local web build included in this portfolio.</p>
           </section>
